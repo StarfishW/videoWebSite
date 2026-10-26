@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ v.title }} · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="watch">
+  <div class="watch-main">
+    <video class="player" controls preload="metadata" playsinline
+           {% if v.thumb %}poster="{{ url_for('thumb', vid=v.id) }}"{% endif %}>
+      <source src="{{ url_for('media', vid=v.id) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
+    </video>
+    <p class="hint" id="noplay" hidden>Your browser can't play this format ({{ v.original_name|ext }}). Download the file to watch it.</p>
+
+    <h1 class="watch-title">{{ v.title }}</h1>
+    <div class="watch-bar">
+      <div class="meta">
+        {% if v.category_name %}
+          <a class="tag" href="{{ url_for('index', category=v.category_id) }}">{{ v.category_name }}</a>
+        {% else %}
+          <span class="tag muted">Uncategorized</span>
+        {% endif %}
+        <span>Uploaded {{ v.created_at|date }}</span>
+        {% if v.duration %}<span>{{ v.duration|duration }}</span>{% endif %}
+        <span>{{ v.size|filesize }}</span>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="{{ url_for('download', vid=v.id) }}">&#8681; Download</a>
+        {% if is_admin %}
+          <a class="btn" href="{{ url_for('edit', vid=v.id) }}">Edit</a>
+          <form action="{{ url_for('delete', vid=v.id) }}" method="post" class="inline"
+                onsubmit="return confirm('Delete this video permanently? This cannot be undone.')">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <button class="btn danger" type="submit">Delete</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% if v.description %}<div class="description">{{ v.description }}</div>{% endif %}
+    <p class="filename">File: {{ v.original_name }}</p>
+  </div>
+
+  {% if related %}
+  <aside class="related">
+    <h2>More in {{ v.category_name }}</h2>
+    {% for r in related %}
+      {% with v = r %}
+      <a class="related-item" href="{{ url_for('video', vid=v.id) }}">
+        {% include "_thumb.html" %}
+        <div><strong>{{ v.title }}</strong><small>{{ v.created_at|date }}</small></div>
+      </a>
+      {% endwith %}
+    {% endfor %}
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    var src = document.querySelector('.player source');
+    src.addEventListener('error', function () { document.getElementById('noplay').hidden = false; });
+  })();
+</script>
+{% endblock %}

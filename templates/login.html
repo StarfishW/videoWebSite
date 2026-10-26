@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Log in · {{ site_name }}{% endblock %}
+{% block content %}
+<form class="panel narrow" method="post" action="{{ url_for('login') }}">
+  <h1>Admin login</h1>
+  <p class="hint">Log in to upload, edit, and delete videos.</p>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Username <input name="username" autocomplete="username" required autofocus></label>
+  <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+  <button class="btn primary block" type="submit">Log in</button>
+</form>
+{% endblock %}

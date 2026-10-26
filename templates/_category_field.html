@@ -1,0 +1,13 @@
+{# expects `categories` and `selected` (string id or '') #}
+<label>Category
+  <select name="category" data-category-select>
+    <option value="">— Uncategorized —</option>
+    {% for c in categories %}
+      <option value="{{ c.id }}" {{ 'selected' if selected == c.id|string }}>{{ c.name }}</option>
+    {% endfor %}
+    <option value="__new__">+ New category&hellip;</option>
+  </select>
+</label>
+<label data-new-category hidden>New category name
+  <input name="new_category" maxlength="80" placeholder="e.g. Mathematics">
+</label>

@@ -1,0 +1,15 @@
+services:
+  video-library:
+    build: .
+    image: video-library:latest
+    container_name: video-library
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-5000}:5000"
+    environment:
+      VIDEO_ADMIN_USER: ${VIDEO_ADMIN_USER:-admin}
+      VIDEO_ADMIN_PASS: ${VIDEO_ADMIN_PASS:-admin}
+      VIDEO_MAX_UPLOAD_GB: ${VIDEO_MAX_UPLOAD_GB:-20}
+      SITE_NAME: ${SITE_NAME:-Video Library}
+    volumes:
+      - ./data:/app/data

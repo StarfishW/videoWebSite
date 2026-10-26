@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Upload · {{ site_name }}{% endblock %}
+{% block content %}
+<form class="panel" method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" data-ajax>
+  <h1>Upload a video</h1>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="duration">
+
+  <label class="dropzone" data-dropzone>
+    <input type="file" name="video" accept="video/*,.mkv,.avi,.wmv,.flv,.ts" required>
+    <span class="dz-text"><strong>Choose a video file</strong> or drag it here<br><small>Max {{ '%g'|format(max_gb) }} GB</small></span>
+  </label>
+
+  <div class="form-grid">
+    <div>
+      <label>Title <input name="title" maxlength="200" placeholder="Defaults to the file name"></label>
+      {% with selected = preselect %}{% include "_category_field.html" %}{% endwith %}
+      <label>Description <textarea name="description" rows="4" placeholder="Optional notes about this video"></textarea></label>
+    </div>
+    <div>
+      <span class="label">Thumbnail</span>
+      <div class="thumb-preview">
+        <img id="thumb-preview" alt="Thumbnail preview" hidden>
+        <span id="thumb-empty">A frame from the video is captured automatically.</span>
+      </div>
+      <label class="small">Or use your own image <input type="file" name="thumbnail" accept="image/*"></label>
+    </div>
+  </div>
+
+  <div class="progress" hidden><div class="progress-bar"></div><span class="progress-text"></span></div>
+  <p class="form-error" hidden></p>
+  <button class="btn primary" type="submit">Upload</button>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='forms.js') }}"></script>{% endblock %}

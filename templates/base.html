@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}"><span class="logo">&#9654;</span>{{ site_name }}</a>
+  <form class="search" action="{{ url_for('index') }}" method="get" role="search">
+    <input type="search" name="q" value="{{ request.args.get('q', '') }}" placeholder="Search videos&hellip;" aria-label="Search videos">
+    {% if request.endpoint == 'index' and request.args.get('category') %}
+      <input type="hidden" name="category" value="{{ request.args.get('category') }}">
+    {% endif %}
+  </form>
+  <nav class="nav">
+    {% if is_admin %}
+      <a class="btn primary" href="{{ url_for('upload') }}">&#8679; Upload</a>
+      <a class="btn" href="{{ url_for('categories') }}">Categories</a>
+      <form action="{{ url_for('logout') }}" method="post" class="inline">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn ghost" type="submit">Log out</button>
+      </form>
+    {% else %}
+      <a class="btn" href="{{ url_for('login', next=request.full_path) }}">Admin login</a>
+    {% endif %}
+  </nav>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flashes">
+      {% for kind, msg in messages %}<div class="flash {{ kind }}">{{ msg }}</div>{% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main class="container">
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

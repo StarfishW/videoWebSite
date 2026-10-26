@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ active_name ~ ' · ' if active_name }}{{ site_name }}{% endblock %}
+{% block content %}
+<div class="chips" role="navigation" aria-label="Categories">
+  <a class="chip {{ 'active' if not cat }}" href="{{ url_for('index', q=q or None, sort=sort) }}">All <span>{{ total }}</span></a>
+  {% for c in categories %}
+    <a class="chip {{ 'active' if cat == c.id|string }}" href="{{ url_for('index', category=c.id, q=q or None, sort=sort) }}">{{ c.name }} <span>{{ c.n }}</span></a>
+  {% endfor %}
+  {% if uncategorized %}
+    <a class="chip {{ 'active' if cat == 'none' }}" href="{{ url_for('index', category='none', q=q or None, sort=sort) }}">Uncategorized <span>{{ uncategorized }}</span></a>
+  {% endif %}
+</div>
+
+<div class="listhead">
+  <h1>{{ active_name or 'All videos' }}{% if q %} <small>matching &ldquo;{{ q }}&rdquo;</small>{% endif %}</h1>
+  <form method="get" class="sort">
+    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    {% if cat %}<input type="hidden" name="category" value="{{ cat }}">{% endif %}
+    <label>Sort
+      <select name="sort" onchange="this.form.submit()">
+        <option value="new" {{ 'selected' if sort == 'new' }}>Newest first</option>
+        <option value="old" {{ 'selected' if sort == 'old' }}>Oldest first</option>
+        <option value="title" {{ 'selected' if sort == 'title' }}>Title A–Z</option>
+      </select>
+    </label>
+  </form>
+</div>
+
+{% if videos %}
+  <div class="grid">
+    {% for v in videos %}
+      <article class="card">
+        <a href="{{ url_for('video', vid=v.id) }}" class="card-link">{% include "_thumb.html" %}</a>
+        <div class="card-body">
+          <a href="{{ url_for('video', vid=v.id) }}" class="card-title">{{ v.title }}</a>
+          <div class="meta">
+            {% if v.category_name %}
+              <a class="tag" href="{{ url_for('index', category=v.category_id) }}">{{ v.category_name }}</a>
+            {% else %}
+              <span class="tag muted">Uncategorized</span>
+            {% endif %}
+            <span title="Upload date">{{ v.created_at|date }}</span>
+          </div>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    {% if q or cat %}
+      <p>No videos found.</p>
+      <a class="btn" href="{{ url_for('index') }}">Show all videos</a>
+    {% elif is_admin %}
+      <p>Your library is empty.</p>
+      <a class="btn primary" href="{{ url_for('upload') }}">Upload your first video</a>
+    {% else %}
+      <p>No videos yet.</p>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

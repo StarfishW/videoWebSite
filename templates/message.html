@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="empty"><h1>{{ title }}</h1><p>{{ message }}</p><a class="btn" href="{{ url_for('index') }}">Back to library</a></div>
+{% endblock %}

@@ -1,0 +1,5 @@
+# Library content and secrets stay local
+data/
+.env
+__pycache__/
+*.pyc
