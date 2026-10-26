@@ -227,3 +227,22 @@ a.tag:hover { text-decoration: underline; }
   .panel { padding: 16px; }
   .cat-list li { flex-wrap: wrap; }
 }
+
+/* ---------- language switch */
+.lang-switch { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.lang-switch select { width: auto; padding: 6px 8px; margin: 0; }
+
+/* ---------- API page */
+.panel.wide { max-width: 1000px; }
+.panel h2 { font-size: 1.05rem; margin: 26px 0 8px; }
+code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .85em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; margin: 6px 0 14px; }
+pre code { background: none; padding: 0; font-size: .82rem; line-height: 1.55; }
+.token-row { flex-wrap: wrap; }
+.token-row input { flex: 1; min-width: 220px; font-family: ui-monospace, Consolas, monospace; }
+.api-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.api-table th, .api-table td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; }
+.api-table th { color: var(--muted); font-weight: 600; border-top: none; }
+.api-table td:first-child { white-space: nowrap; }
+.api-table td:nth-child(2) { text-align: center; color: var(--accent); }
+@media (max-width: 640px) { .api-table td:first-child { white-space: normal; } }

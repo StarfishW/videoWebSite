@@ -15,6 +15,11 @@
   var progress = form.querySelector('.progress');
   var submitBtn = form.querySelector('button[type=submit]');
   var thumbBlob = null;
+  function t(s, vars) {
+    var out = (window.I18N && window.I18N[s]) || s;
+    for (var k in vars || {}) out = out.replace('{' + k + '}', vars[k]);
+    return out;
+  }
 
   function showPreview(src) {
     preview.src = src;
@@ -117,8 +122,7 @@
         if (emptyNote && !(thumbInput && thumbInput.files.length)) {
           preview.hidden = true;
           emptyNote.hidden = false;
-          emptyNote.textContent = "Your browser can't preview this format, so no frame was captured. " +
-            'Pick an image below, or a placeholder will be shown.';
+          emptyNote.textContent = t("Your browser can't preview this format, so no frame was captured. Pick an image below, or a placeholder will be shown.");
         }
       });
       v.src = url;
@@ -135,7 +139,7 @@
     });
     useFrame.addEventListener('click', function () {
       capture(frameSource).then(function (blob) {
-        if (!blob) return showError('Play or seek the video first, then capture a frame.');
+        if (!blob) return showError(t('Play or seek the video first, then capture a frame.'));
         if (thumbInput) thumbInput.value = '';
         showError('');
         setThumbBlob(blob);
@@ -155,7 +159,7 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     if (catSelect && catSelect.value === '__new__' && !newCat.querySelector('input').value.trim()) {
-      return showError('Type a name for the new category.');
+      return showError(t('Type a name for the new category.'));
     }
     var fd = new FormData(form);
     if (!(thumbInput && thumbInput.files.length) && thumbBlob) {
@@ -171,18 +175,18 @@
       if (!ev.lengthComputable) return;
       var pct = Math.round((ev.loaded / ev.total) * 100);
       bar.style.width = pct + '%';
-      text.textContent = pct < 100 ? 'Uploading… ' + pct + '%' : 'Processing…';
+      text.textContent = pct < 100 ? t('Uploading… {pct}%', { pct: pct }) : t('Processing…');
     });
     xhr.addEventListener('load', function () {
       var res = null;
       try { res = JSON.parse(xhr.responseText); } catch (err) { /* not JSON */ }
       if (res && res.ok) { window.location = res.redirect; return; }
       done();
-      showError((res && res.error) || ('Something went wrong (HTTP ' + xhr.status + ').'));
+      showError((res && res.error) || t('Something went wrong (HTTP {status}).', { status: xhr.status }));
     });
     xhr.addEventListener('error', function () {
       done();
-      showError('Network error - the upload did not finish.');
+      showError(t('Network error - the upload did not finish.'));
     });
 
     function done() {
@@ -195,8 +199,8 @@
     submitBtn.disabled = true;
     progress.hidden = false;
     bar.style.width = '0%';
-    text.textContent = 'Starting…';
-    window.onbeforeunload = function () { return 'Upload in progress'; };
+    text.textContent = t('Starting…');
+    window.onbeforeunload = function () { return t('Upload in progress'); };
     xhr.addEventListener('load', function () { window.onbeforeunload = null; });
     xhr.send(fd);
   });

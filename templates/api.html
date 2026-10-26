@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}API · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="panel wide">
+  <h1>{{ _('Upload API') }}</h1>
+  <p class="hint">{{ _('Upload videos directly from scripts or other programs, without opening the website.') }}</p>
+
+  <h2>{{ _('Your API token') }}</h2>
+  <p class="hint">{{ _('Send it with every write request as the header') }} <code>Authorization: Bearer &lt;token&gt;</code>. {{ _('Keep it secret - anyone with it can upload and delete videos.') }}</p>
+  <div class="row token-row">
+    <input id="api-token" type="password" value="{{ token }}" readonly aria-label="{{ _('Your API token') }}">
+    <button type="button" class="btn" id="token-show">{{ _('Show') }}</button>
+    <button type="button" class="btn" id="token-copy">{{ _('Copy') }}</button>
+    {% if not token_from_env %}
+      <form method="post" action="{{ url_for('regenerate_token') }}" class="inline"
+            data-confirm="{{ _('Create a new token? The current token will stop working.') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn danger" type="submit">{{ _('Regenerate') }}</button>
+      </form>
+    {% endif %}
+  </div>
+  {% if token_from_env %}<p class="hint">{{ _('This token is set by the VIDEO_API_TOKEN environment variable.') }}</p>{% endif %}
+
+  <h2>{{ _('Upload a video') }}</h2>
+  <p class="hint">{{ _('Only the file is required. A category that does not exist yet is created automatically.') }}
+    {% if ffmpeg %}{{ _('Thumbnail and duration are generated on the server.') }}{% else %}{{ _('ffmpeg is not installed, so send a thumbnail image yourself if you want one (the Docker image includes ffmpeg).') }}{% endif %}
+    {{ _('Max {n} GB', n='%g'|format(max_gb)) }}.</p>
+<pre><code>curl -X POST {{ base }}/api/videos \
+  -H "Authorization: Bearer <span class="tok">{{ token }}</span>" \
+  -F "file=@lecture01.mp4" \
+  -F "title=Lecture 1: Introduction" \
+  -F "category=Mathematics" \
+  -F "description=Optional notes"</code></pre>
+
+  <p class="hint">PowerShell (Windows 10/11):</p>
+<pre><code>curl.exe -X POST {{ base }}/api/videos `
+  -H "Authorization: Bearer <span class="tok">{{ token }}</span>" `
+  -F "file=@C:\Videos\lecture01.mp4" -F "category=Mathematics"</code></pre>
+
+  <p class="hint">Python:</p>
+<pre><code>import requests
+with open("lecture01.mp4", "rb") as f:
+    r = requests.post("{{ base }}/api/videos",
+                      headers={"Authorization": "Bearer <span class="tok">{{ token }}</span>"},
+                      files={"file": f},
+                      data={"title": "Lecture 1", "category": "Mathematics"})
+print(r.status_code, r.json())</code></pre>
+
+  <h2>{{ _('All endpoints') }}</h2>
+  <table class="api-table">
+    <thead><tr><th>{{ _('Request') }}</th><th>{{ _('Token') }}</th><th>{{ _('What it does') }}</th></tr></thead>
+    <tbody>
+      <tr><td><code>POST /api/videos</code></td><td>&#10003;</td><td>{{ _('Upload (multipart form): file, title, description, category or category_id, thumbnail') }}</td></tr>
+      <tr><td><code>GET /api/videos</code></td><td></td><td>{{ _('List videos. Optional: ?category=&lt;id&gt;|none, q, sort=new|old|title, limit, offset')|safe }}</td></tr>
+      <tr><td><code>GET /api/videos/&lt;id&gt;</code></td><td></td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
+      <tr><td><code>PATCH /api/videos/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('Change title, description, category or category_id (JSON)') }}</td></tr>
+      <tr><td><code>DELETE /api/videos/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('Delete a video and its files') }}</td></tr>
+      <tr><td><code>GET /api/categories</code></td><td></td><td>{{ _('List categories with video counts') }}</td></tr>
+      <tr><td><code>POST /api/categories</code></td><td>&#10003;</td><td>{{ _('Create a category: {"name": "..."}') }}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>{{ _('Example response') }}</h2>
+<pre><code>{
+  "id": 12,
+  "title": "Lecture 1: Introduction",
+  "description": "Optional notes",
+  "category": {"id": 3, "name": "Mathematics"},
+  "original_name": "lecture01.mp4",
+  "size": 104857600,
+  "duration": 1834.5,
+  "created_at": "2026-10-26 14:03:11",
+  "urls": {
+    "page": "{{ base }}/video/12",
+    "stream": "{{ base }}/media/12",
+    "download": "{{ base }}/download/12",
+    "thumbnail": "{{ base }}/thumb/12"
+  }
+}</code></pre>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    var input = document.getElementById('api-token');
+    var toks = document.querySelectorAll('.tok');
+    var shown = false;
+    function render() {
+      input.type = shown ? 'text' : 'password';
+      toks.forEach(function (el) { el.textContent = shown ? input.value : '<token>'; });
+      document.getElementById('token-show').textContent = shown ? I18N['Hide'] : I18N['Show'];
+    }
+    document.getElementById('token-show').addEventListener('click', function () { shown = !shown; render(); });
+    document.getElementById('token-copy').addEventListener('click', function (e) {
+      var btn = e.currentTarget;
+      function ok() {
+        btn.textContent = I18N['Copied'];
+        setTimeout(function () { btn.textContent = I18N['Copy']; }, 1500);
+      }
+      function fallback() {  // clipboard API needs HTTPS or localhost
+        var type = input.type;
+        input.type = 'text'; input.select(); document.execCommand('copy');
+        input.type = type; input.blur(); ok();
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(input.value).then(ok, fallback);
+      } else {
+        fallback();
+      }
+    });
+    document.querySelectorAll('form[data-confirm]').forEach(function (f) {
+      f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
+    });
+    render();
+  })();
+</script>
+{% endblock %}

@@ -43,6 +43,36 @@ To let other computers/phones on your network use it: `python app.py --host 0.0.
 - **Edit** title, description, category and thumbnail (including "use current frame").
 - **Categories page** to add, rename and delete categories.
 
+- **Languages:** English and 中文. Pick one from the 🌐 menu in the header; the choice is remembered.
+  The first visit follows the browser's language. Translations live in `translations.py`.
+  To add a language, add it to `LANGUAGES` and add a dictionary to `CATALOGS` there.
+- **Upload API** for scripts and other programs (see below).
+
+## Upload API
+
+Log in and open the **API** page to see your token and ready-to-copy examples.
+
+```
+curl -X POST http://localhost:5000/api/videos \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@lecture01.mp4" -F "title=Lecture 1" -F "category=Mathematics"
+```
+
+| Request | Token | What it does |
+|---|---|---|
+| `POST /api/videos` | yes | Upload (multipart): `file` (required), `title`, `description`, `category` (name, created if new) or `category_id`, `thumbnail` |
+| `GET /api/videos` | no | List; optional `category=<id>\|none`, `q`, `sort=new\|old\|title`, `limit`, `offset` |
+| `GET /api/videos/<id>` | no | One video with stream/download/thumbnail URLs |
+| `PATCH /api/videos/<id>` | yes | JSON: `title`, `description`, `category` or `category_id` |
+| `DELETE /api/videos/<id>` | yes | Delete a video and its files |
+| `GET /api/categories` | no | Categories with counts |
+| `POST /api/categories` | yes | JSON: `{"name": "..."}` |
+
+The token can also be sent as `X-API-Key: <token>`. It's generated automatically and stored in
+`data/api_token`. You can regenerate it on the API page, or fix it with `VIDEO_API_TOKEN`.
+If ffmpeg is installed (it's included in the Docker image), uploads get a thumbnail and duration
+generated on the server.
+
 Formats: any file can be stored and downloaded; in-browser playback and automatic
 thumbnails work for formats the browser understands (MP4/H.264, WebM, most MOV).
 Other formats (AVI, WMV, some MKV) get a placeholder thumbnail - you can upload an image instead.
@@ -63,5 +93,6 @@ Everything is in the `data` folder - back this up to back up your library:
 | `VIDEO_ADMIN_PASS` | `admin` | Login password - change this if the site is reachable by others |
 | `VIDEO_MAX_UPLOAD_GB` | `20` | Largest allowed upload |
 | `SITE_NAME` | `Video Library` | Name shown in the header |
+| `VIDEO_API_TOKEN` | auto-generated | Fixed token for the upload API |
 
 Example (PowerShell): `$env:VIDEO_ADMIN_PASS = "something-strong"; python app.py`
