@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="empty">
+  <div class="lock" aria-hidden="true">&#128274;</div>
+  <h1>{{ _('This video library is private') }}</h1>
+  <p>{{ _('To watch a video, open the link that was shared with you.') }}</p>
+  <a class="btn" href="{{ url_for('login') }}">{{ _('Admin login') }}</a>
+</div>
+{% endblock %}

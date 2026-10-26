@@ -32,7 +32,8 @@
     <div class="watch-bar">
       <div class="meta">
         {% if v.category_name %}
-          <a class="tag" href="{{ url_for('index', category=v.category_id) }}">{{ v.category_name }}</a>
+          {% if is_admin %}<a class="tag" href="{{ url_for('index', category=v.category_id) }}">{{ v.category_name }}</a>
+          {% else %}<span class="tag">{{ v.category_name }}</span>{% endif %}
         {% else %}
           <span class="tag muted">{{ _('Uncategorized') }}</span>
         {% endif %}

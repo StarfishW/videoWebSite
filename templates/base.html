@@ -10,6 +10,7 @@
 </head>
 <body>
 <header class="topbar">
+  {% if is_admin %}
   <a class="brand" href="{{ url_for('index') }}"><span class="logo">&#9654;</span>{{ site_name }}</a>
   <form class="search" action="{{ url_for('index') }}" method="get" role="search">
     <input type="search" name="q" value="{{ request.args.get('q', '') }}" placeholder="{{ _('Search videos…') }}" aria-label="{{ _('Search videos…') }}">
@@ -17,6 +18,11 @@
       <input type="hidden" name="category" value="{{ request.args.get('category') }}">
     {% endif %}
   </form>
+  {% else %}
+  {# Visitors only see the video they were given a link to - no way into the library. #}
+  <span class="brand"><span class="logo">&#9654;</span>{{ site_name }}</span>
+  <span class="spacer"></span>
+  {% endif %}
   <nav class="nav">
     {% if is_admin %}
       <a class="btn primary" href="{{ url_for('upload') }}">&#8679; {{ _('Upload') }}</a>

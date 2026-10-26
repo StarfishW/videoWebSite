@@ -15,7 +15,7 @@
   </div>
 {% else %}
   <h2>{{ _('Your API URL') }}</h2>
-  <p class="hint">{{ _('This address is random and secret. Anyone who has it can see the video list through the API, so share it only with programs you trust.') }}</p>
+  <p class="hint">{{ _('This address is random and secret. Every request also needs the token below, so keep both private.') }}</p>
   <div class="row token-row">
     <input class="secret" type="password" value="{{ base }}" readonly aria-label="{{ _('Your API URL') }}">
     <button type="button" class="btn" data-show>{{ _('Show') }}</button>
@@ -28,7 +28,7 @@
   </div>
 
   <h2>{{ _('Your API token') }}</h2>
-  <p class="hint">{{ _('Uploading, editing and deleting also need this token in the header') }} <code>Authorization: Bearer &lt;token&gt;</code>. {{ _('Keep it secret - anyone with it can upload and delete videos.') }}</p>
+  <p class="hint">{{ _('Every API request needs this token in the header') }} <code>Authorization: Bearer &lt;token&gt;</code>. {{ _('Keep it secret - anyone with it can upload and delete videos.') }}</p>
   <div class="row token-row">
     <input class="secret" type="password" value="{{ token }}" readonly aria-label="{{ _('Your API token') }}">
     <button type="button" class="btn" data-show>{{ _('Show') }}</button>
@@ -73,11 +73,11 @@ print(r.status_code, r.json())</code></pre>
     <thead><tr><th>{{ _('Request') }}</th><th>{{ _('Token') }}</th><th>{{ _('What it does') }}</th></tr></thead>
     <tbody>
       <tr><td><code>POST /videos</code></td><td>&#10003;</td><td>{{ _('Upload (multipart form): file, title, description, category or category_id, thumbnail') }}</td></tr>
-      <tr><td><code>GET /videos</code></td><td></td><td>{{ _('List videos. Optional: ?category=&lt;id&gt;|none, q, sort=new|old|title, limit, offset')|safe }}</td></tr>
-      <tr><td><code>GET /videos/&lt;id|slug&gt;</code></td><td></td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
+      <tr><td><code>GET /videos</code></td><td>&#10003;</td><td>{{ _('List videos. Optional: ?category=&lt;id&gt;|none, q, sort=new|old|title, limit, offset')|safe }}</td></tr>
+      <tr><td><code>GET /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
       <tr><td><code>PATCH /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Change title, description, category or category_id (JSON)') }}</td></tr>
       <tr><td><code>DELETE /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Delete a video and its files') }}</td></tr>
-      <tr><td><code>GET /categories</code></td><td></td><td>{{ _('List categories with video counts') }}</td></tr>
+      <tr><td><code>GET /categories</code></td><td>&#10003;</td><td>{{ _('List categories with video counts') }}</td></tr>
       <tr><td><code>POST /categories</code></td><td>&#10003;</td><td>{{ _('Create a category: {"name": "..."}') }}</td></tr>
     </tbody>
   </table>

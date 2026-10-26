@@ -577,6 +577,9 @@ def delete_video_row(v):
 
 @app.route("/")
 def index():
+    # The library is private: visitors only see videos whose share link they were given.
+    if not is_admin():
+        return render_template("private.html")
     q = request.args.get("q", "").strip()
     cat = request.args.get("category", "")
     sort = request.args.get("sort", "new")
@@ -598,12 +601,13 @@ def index():
 
 
 def find_by_ref(ref):
-    """Find a video by short link (MD5 prefix) or, for old links, by numeric id."""
+    """Find a video by short link (MD5 prefix). Numeric ids work only for the admin,
+    so visitors can't step through /video/1, /video/2, ... to find unshared videos."""
     db = get_db()
     sql = ("SELECT v.*, c.name AS category_name FROM videos v "
            "LEFT JOIN categories c ON c.id = v.category_id WHERE ")
     row = db.execute(sql + "v.slug = ?", (ref,)).fetchone()
-    if row is None and ref.isdigit() and len(ref) < SLUG_LEN:
+    if row is None and ref.isdigit() and len(ref) < SLUG_LEN and is_admin():
         row = db.execute(sql + "v.id = ?", (int(ref),)).fetchone()
     return row
 
@@ -629,7 +633,7 @@ def video(slug):
     if resp:
         return resp
     related = []
-    if v["category_id"] is not None:
+    if v["category_id"] is not None and is_admin():  # don't reveal other videos to visitors
         related = get_db().execute(
             "SELECT * FROM videos WHERE category_id = ? AND id != ? "
             "ORDER BY created_at DESC LIMIT 8", (v["category_id"], v["id"])).fetchall()
@@ -638,6 +642,8 @@ def video(slug):
 
 @app.route("/video/<int:vid>")
 def legacy_video(vid):
+    if not is_admin():
+        abort(404)
     v = get_video(vid)
     return redirect(url_for("video", slug=v["slug"], **request.args), 301)
 
@@ -694,6 +700,18 @@ def thumb(slug):
 def video_link(vid):
     row = get_db().execute("SELECT slug FROM videos WHERE id = ?", (vid,)).fetchone()
     return url_for("video", slug=row["slug"])
+
+
+@app.route("/robots.txt")
+def robots():
+    # Shared links are unlisted: keep search engines out.
+    return Response("User-agent: *\nDisallow: /\n", mimetype="text/plain")
+
+
+@app.after_request
+def _no_index(resp):
+    resp.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    return resp
 
 
 # ---------------------------------------------------------------- login
@@ -912,6 +930,7 @@ def video_json(v):
 
 @app.get("/api/<key>/categories")
 @api_enabled
+@token_required
 def api_categories():
     return jsonify([{"id": c["id"], "name": c["name"], "count": c["n"]} for c in all_categories()])
 
@@ -932,6 +951,7 @@ def api_create_category():
 
 @app.get("/api/<key>/videos")
 @api_enabled
+@token_required
 def api_list_videos():
     try:
         limit = min(max(int(request.args.get("limit", 100)), 1), 1000)
@@ -945,11 +965,14 @@ def api_list_videos():
 
 def api_find(ref):
     """API accepts either the numeric id or the short link (slug)."""
-    return find_by_ref(ref) or (find_video(int(ref)) if ref.isdigit() else None)
+    row = get_db().execute("SELECT v.*, c.name AS category_name FROM videos v "
+                           "LEFT JOIN categories c ON c.id = v.category_id WHERE v.slug = ?", (ref,)).fetchone()
+    return row or (find_video(int(ref)) if ref.isdigit() else None)
 
 
 @app.get("/api/<key>/videos/<ref>")
 @api_enabled
+@token_required
 def api_get_video(ref):
     v = api_find(ref)
     return jsonify(video_json(v)) if v else api_error("Video not found.", 404)

@@ -111,6 +111,8 @@ ZH = {
 
     # misc pages
     "Back to library": "返回视频库",
+    "This video library is private": "这是一个私有视频库",
+    "To watch a video, open the link that was shared with you.": "如需观看视频，请打开别人分享给你的链接。",
     "Not found": "未找到",
     "That page or video doesn't exist.": "该页面或视频不存在。",
 
@@ -126,11 +128,11 @@ ZH = {
         "开启后会随机生成一个保密的 API 地址和令牌。开启之前，无法通过 API 访问任何内容。",
     "Turn on API and generate URL": "开启 API 并生成地址",
     "Your API URL": "你的 API 地址",
-    "This address is random and secret. Anyone who has it can see the video list through the API, so share it only with programs you trust.":
-        "这个地址是随机生成且保密的。拿到地址的人可以通过 API 查看视频列表，请只提供给你信任的程序。",
+    "This address is random and secret. Every request also needs the token below, so keep both private.":
+        "这个地址是随机生成且保密的。每个请求还需要下面的令牌，请妥善保管两者。",
     "Generate a new URL? The current URL will stop working.": "确定生成新地址吗？当前地址将失效。",
     "New URL": "生成新地址",
-    "Uploading, editing and deleting also need this token in the header": "上传、编辑和删除还需要在请求头中带上此令牌",
+    "Every API request needs this token in the header": "每个 API 请求都需要在请求头中带上此令牌",
     "New token": "生成新令牌",
     "Show real URL and token in examples": "在示例中显示真实地址和令牌",
     "All paths are relative to your API URL.": "以下路径都接在你的 API 地址后面。",

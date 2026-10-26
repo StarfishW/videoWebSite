@@ -2,7 +2,9 @@
 
 A small self-hosted website for managing an educational video collection.
 
-- Anyone who opens the site can browse, filter by category, search, watch and download.
+- The library is **private**: visitors can only watch (and download) a video whose share link
+  they were given. The homepage, search, categories and other videos are hidden from them,
+  numeric links like `/video/2` don't work for them, and search engines are asked not to index the site.
 - Logging in as **admin / admin** lets you upload, edit, delete and manage categories.
   Change the password right after the first login (**Password** in the header).
 
@@ -73,11 +75,11 @@ Paths below are relative to your API URL.
 | Request | Token | What it does |
 |---|---|---|
 | `POST /videos` | yes | Upload (multipart): `file` (required), `title`, `description`, `category` (name, created if new) or `category_id`, `thumbnail` |
-| `GET /videos` | no | List; optional `category=<id>\|none`, `q`, `sort=new\|old\|title`, `limit`, `offset` |
-| `GET /videos/<id or slug>` | no | One video with stream/download/thumbnail URLs |
+| `GET /videos` | yes | List; optional `category=<id>\|none`, `q`, `sort=new\|old\|title`, `limit`, `offset` |
+| `GET /videos/<id or slug>` | yes | One video with stream/download/thumbnail URLs |
 | `PATCH /videos/<id or slug>` | yes | JSON: `title`, `description`, `category` or `category_id` |
 | `DELETE /videos/<id or slug>` | yes | Delete a video and its files |
-| `GET /categories` | no | Categories with counts |
+| `GET /categories` | yes | Categories with counts |
 | `POST /categories` | yes | JSON: `{"name": "..."}` |
 
 The token can also be sent as `X-API-Key: <token>`.
