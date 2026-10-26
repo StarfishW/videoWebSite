@@ -1,7 +1,7 @@
 {# expects `v` #}
 <div class="thumb">
   {% if v.thumb %}
-    <img src="{{ url_for('thumb', vid=v.id) }}" alt="" loading="lazy">
+    <img src="{{ url_for('thumb', slug=v.slug) }}" alt="" loading="lazy">
   {% else %}
     <div class="thumb-placeholder"><span>&#9654;</span><small>{{ v.original_name|ext }}</small></div>
   {% endif %}

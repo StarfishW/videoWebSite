@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% set page_url = url_for('video', vid=v.id, _external=True) %}
-{% set embed_url = url_for('embed', vid=v.id, _external=True) %}
+{% set page_url = url_for('video', slug=v.slug, _external=True) %}
+{% set embed_url = url_for('embed', slug=v.slug, _external=True) %}
 {% block title %}{{ v.title }} · {{ site_name }}{% endblock %}
 {% block head %}
   {# Link previews in chat apps / social sites #}
@@ -11,20 +11,20 @@
   <meta property="og:title" content="{{ v.title }}">
   <meta property="og:description" content="{{ (v.description or site_name)|truncate(200) }}">
   <meta property="og:url" content="{{ page_url }}">
-  {% if v.thumb %}<meta property="og:image" content="{{ url_for('thumb', vid=v.id, _external=True) }}">{% endif %}
-  <meta property="og:video" content="{{ url_for('media', vid=v.id, _external=True) }}">
+  {% if v.thumb %}<meta property="og:image" content="{{ url_for('thumb', slug=v.slug, _external=True) }}">{% endif %}
+  <meta property="og:video" content="{{ url_for('media', slug=v.slug, _external=True) }}">
   <meta property="og:video:type" content="{{ v.mime or 'video/mp4' }}">
   {% if v.duration %}<meta property="video:duration" content="{{ v.duration|int }}">{% endif %}
   <meta name="twitter:card" content="{{ 'summary_large_image' if v.thumb else 'summary' }}">
   <meta name="twitter:title" content="{{ v.title }}">
-  {% if v.thumb %}<meta name="twitter:image" content="{{ url_for('thumb', vid=v.id, _external=True) }}">{% endif %}
+  {% if v.thumb %}<meta name="twitter:image" content="{{ url_for('thumb', slug=v.slug, _external=True) }}">{% endif %}
 {% endblock %}
 {% block content %}
 <div class="watch">
   <div class="watch-main">
     <video class="player" controls preload="metadata" playsinline
-           {% if v.thumb %}poster="{{ url_for('thumb', vid=v.id) }}"{% endif %}>
-      <source src="{{ url_for('media', vid=v.id) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
+           {% if v.thumb %}poster="{{ url_for('thumb', slug=v.slug) }}"{% endif %}>
+      <source src="{{ url_for('media', slug=v.slug) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
     </video>
     <p class="hint" id="noplay" hidden>{{ _("Your browser can't play this format ({ext}). Download the file to watch it.", ext=v.original_name|ext) }}</p>
 
@@ -42,7 +42,7 @@
       </div>
       <div class="actions">
         <button class="btn primary" type="button" id="share-open">&#10150; {{ _('Share') }}</button>
-        <a class="btn" href="{{ url_for('download', vid=v.id) }}">&#8681; {{ _('Download') }}</a>
+        <a class="btn" href="{{ url_for('download', slug=v.slug) }}">&#8681; {{ _('Download') }}</a>
         {% if is_admin %}
           <a class="btn" href="{{ url_for('edit', vid=v.id) }}">{{ _('Edit') }}</a>
           <form action="{{ url_for('delete', vid=v.id) }}" method="post" class="inline"
@@ -62,7 +62,7 @@
     <h2>{{ _('More in {category}', category=v.category_name) }}</h2>
     {% for r in related %}
       {% with v = r %}
-      <a class="related-item" href="{{ url_for('video', vid=v.id) }}">
+      <a class="related-item" href="{{ url_for('video', slug=v.slug) }}">
         {% include "_thumb.html" %}
         <div><strong>{{ v.title }}</strong><small>{{ v.created_at|date }}</small></div>
       </a>
@@ -96,7 +96,7 @@
       <button class="btn" type="button" id="share-native" hidden>{{ _('More sharing options…') }}</button>
     </div>
     <figure class="qr">
-      <img src="{{ url_for('qr', vid=v.id) }}" alt="{{ _('QR code') }}" width="148" height="148"
+      <img src="{{ url_for('qr', slug=v.slug) }}" alt="{{ _('QR code') }}" width="148" height="148"
            onerror="this.parentNode.hidden = true">
       <figcaption>{{ _('Scan with a phone to watch') }}</figcaption>
     </figure>
@@ -117,7 +117,10 @@
     var t = parseInt(new URLSearchParams(location.search).get('t'), 10);
     if (t > 0) player.addEventListener('loadedmetadata', function () { player.currentTime = t; }, { once: true });
 
-    var PAGE = {{ page_url|tojson }}, EMBED = {{ embed_url|tojson }}, TITLE = {{ v.title|tojson }};
+    // Links always use the domain in the browser's address bar.
+    var PAGE = location.origin + {{ url_for('video', slug=v.slug)|tojson }};
+    var EMBED = location.origin + {{ url_for('embed', slug=v.slug)|tojson }};
+    var TITLE = {{ v.title|tojson }};
     var dialog = document.getElementById('share-dialog');
     var link = document.getElementById('share-link');
     var embed = document.getElementById('share-embed');

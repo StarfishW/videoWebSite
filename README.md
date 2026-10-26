@@ -41,6 +41,11 @@ To let other computers/phones on your network use it: `python app.py --host 0.0.
 - **Thumbnails, upload date, category and duration** shown on every video card.
 - **Filter** by category (chips at the top), **search** by title/description, **sort** by date or title.
 - **Download** the original file with its original name. Playback supports seeking.
+- **Share** without login: short links like `/v/3fa1c09b` (the first 8 characters of the file's
+  MD5; a longer prefix is used if two different files clash, and identical files get `-2`, `-3`).
+  Also an embed code, a QR code, and an optional start time (`?t=90`). Links always use the domain
+  the visitor is on. Behind a reverse proxy, pass `X-Forwarded-Host` / `X-Forwarded-Proto`.
+  Old `/video/<id>` links redirect to the short link.
 - **Edit** title, description, category and thumbnail (including "use current frame").
 - **Categories page** to add, rename and delete categories.
 
@@ -69,9 +74,9 @@ Paths below are relative to your API URL.
 |---|---|---|
 | `POST /videos` | yes | Upload (multipart): `file` (required), `title`, `description`, `category` (name, created if new) or `category_id`, `thumbnail` |
 | `GET /videos` | no | List; optional `category=<id>\|none`, `q`, `sort=new\|old\|title`, `limit`, `offset` |
-| `GET /videos/<id>` | no | One video with stream/download/thumbnail URLs |
-| `PATCH /videos/<id>` | yes | JSON: `title`, `description`, `category` or `category_id` |
-| `DELETE /videos/<id>` | yes | Delete a video and its files |
+| `GET /videos/<id or slug>` | no | One video with stream/download/thumbnail URLs |
+| `PATCH /videos/<id or slug>` | yes | JSON: `title`, `description`, `category` or `category_id` |
+| `DELETE /videos/<id or slug>` | yes | Delete a video and its files |
 | `GET /categories` | no | Categories with counts |
 | `POST /categories` | yes | JSON: `{"name": "..."}` |
 
@@ -109,5 +114,6 @@ Everything is in the `data` folder - back this up to back up your library:
 | `VIDEO_ADMIN_PASS` | `admin` | Starting password (used until you change it on the Password page) |
 | `VIDEO_MAX_UPLOAD_GB` | `20` | Largest allowed upload |
 | `SITE_NAME` | `Video Library` | Name shown in the header |
+| `TRUST_PROXY` | `1` | Use `X-Forwarded-Host/Proto` headers for links; set `0` if not behind a proxy and you want to ignore them |
 
 Example (PowerShell): `$env:VIDEO_ADMIN_PASS = "something-strong"; python app.py`

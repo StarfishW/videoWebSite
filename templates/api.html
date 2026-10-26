@@ -74,9 +74,9 @@ print(r.status_code, r.json())</code></pre>
     <tbody>
       <tr><td><code>POST /videos</code></td><td>&#10003;</td><td>{{ _('Upload (multipart form): file, title, description, category or category_id, thumbnail') }}</td></tr>
       <tr><td><code>GET /videos</code></td><td></td><td>{{ _('List videos. Optional: ?category=&lt;id&gt;|none, q, sort=new|old|title, limit, offset')|safe }}</td></tr>
-      <tr><td><code>GET /videos/&lt;id&gt;</code></td><td></td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
-      <tr><td><code>PATCH /videos/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('Change title, description, category or category_id (JSON)') }}</td></tr>
-      <tr><td><code>DELETE /videos/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('Delete a video and its files') }}</td></tr>
+      <tr><td><code>GET /videos/&lt;id|slug&gt;</code></td><td></td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
+      <tr><td><code>PATCH /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Change title, description, category or category_id (JSON)') }}</td></tr>
+      <tr><td><code>DELETE /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Delete a video and its files') }}</td></tr>
       <tr><td><code>GET /categories</code></td><td></td><td>{{ _('List categories with video counts') }}</td></tr>
       <tr><td><code>POST /categories</code></td><td>&#10003;</td><td>{{ _('Create a category: {"name": "..."}') }}</td></tr>
     </tbody>
@@ -85,6 +85,8 @@ print(r.status_code, r.json())</code></pre>
   <h2>{{ _('Example response') }}</h2>
 <pre><code>{
   "id": 12,
+  "slug": "3fa1c09b",
+  "md5": "3fa1c09b5d2e8f4a7c6b1e0d9a8f7e6c",
   "title": "Lecture 1: Introduction",
   "description": "Optional notes",
   "category": {"id": 3, "name": "Mathematics"},
@@ -93,10 +95,11 @@ print(r.status_code, r.json())</code></pre>
   "duration": 1834.5,
   "created_at": "2026-10-26 14:03:11",
   "urls": {
-    "page": "{{ request.host_url }}video/12",
-    "stream": "{{ request.host_url }}media/12",
-    "download": "{{ request.host_url }}download/12",
-    "thumbnail": "{{ request.host_url }}thumb/12"
+    "page": "{{ request.host_url }}v/3fa1c09b",
+    "embed": "{{ request.host_url }}embed/3fa1c09b",
+    "stream": "{{ request.host_url }}media/3fa1c09b",
+    "download": "{{ request.host_url }}download/3fa1c09b",
+    "thumbnail": "{{ request.host_url }}thumb/3fa1c09b"
   }
 }</code></pre>
 

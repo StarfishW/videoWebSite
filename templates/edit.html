@@ -16,10 +16,10 @@
     <div>
       <span class="label">{{ _('Thumbnail') }}</span>
       <div class="thumb-preview">
-        <img id="thumb-preview" alt="{{ _('Thumbnail') }}" {% if v.thumb %}src="{{ url_for('thumb', vid=v.id) }}"{% else %}hidden{% endif %}>
+        <img id="thumb-preview" alt="{{ _('Thumbnail') }}" {% if v.thumb %}src="{{ url_for('thumb', slug=v.slug) }}"{% else %}hidden{% endif %}>
         <span id="thumb-empty" {% if v.thumb %}hidden{% endif %}>{{ _('No thumbnail yet.') }}</span>
       </div>
-      <video id="frame-source" class="player small" controls preload="metadata" muted src="{{ url_for('media', vid=v.id) }}"></video>
+      <video id="frame-source" class="player small" controls preload="metadata" muted src="{{ url_for('media', slug=v.slug) }}"></video>
       <button type="button" class="btn" id="use-frame">{{ _('Use current frame as thumbnail') }}</button>
       <label class="small">{{ _('Or upload an image') }} <input type="file" name="thumbnail" accept="image/*"></label>
       {% if v.thumb %}<label class="check"><input type="checkbox" name="remove_thumb" value="1"> {{ _('Remove thumbnail') }}</label>{% endif %}
@@ -30,7 +30,7 @@
   <p class="form-error" hidden></p>
   <div class="actions">
     <button class="btn primary" type="submit">{{ _('Save changes') }}</button>
-    <a class="btn ghost" href="{{ url_for('video', vid=v.id) }}">{{ _('Cancel') }}</a>
+    <a class="btn ghost" href="{{ url_for('video', slug=v.slug) }}">{{ _('Cancel') }}</a>
   </div>
 </form>
 {% endblock %}

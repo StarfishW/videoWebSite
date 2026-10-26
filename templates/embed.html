@@ -19,10 +19,10 @@
 </head>
 <body>
   <video id="v" controls playsinline preload="metadata"
-         {% if v.thumb %}poster="{{ url_for('thumb', vid=v.id) }}"{% endif %}>
-    <source src="{{ url_for('media', vid=v.id) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
+         {% if v.thumb %}poster="{{ url_for('thumb', slug=v.slug) }}"{% endif %}>
+    <source src="{{ url_for('media', slug=v.slug) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
   </video>
-  <a class="brand" href="{{ url_for('video', vid=v.id, _external=True) }}" target="_blank" rel="noopener">{{ v.title }} · {{ _('Watch on {site}', site=site_name) }}</a>
+  <a class="brand" href="{{ url_for('video', slug=v.slug, _external=True) }}" target="_blank" rel="noopener">{{ v.title }} · {{ _('Watch on {site}', site=site_name) }}</a>
   <script>
     (function () {
       var v = document.getElementById('v');

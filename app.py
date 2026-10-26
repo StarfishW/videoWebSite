@@ -6,6 +6,7 @@ API:  see /api-docs after logging in
 """
 import argparse
 import functools
+import hashlib
 import hmac
 import io
 import mimetypes
@@ -20,6 +21,7 @@ from urllib.parse import urlparse
 
 from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_template,
                    request, send_from_directory, session, url_for)
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from translations import DEFAULT_LANG, JS_STRINGS, LANGUAGES, translate
@@ -61,7 +63,9 @@ CREATE TABLE IF NOT EXISTS videos (
     size          INTEGER NOT NULL DEFAULT 0,
     duration      REAL,
     thumb         TEXT,
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    md5           TEXT,
+    slug          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_videos_category ON videos(category_id);
 CREATE TABLE IF NOT EXISTS settings (
@@ -93,6 +97,10 @@ app.config.update(
 )
 app.json.sort_keys = False
 app.json.ensure_ascii = False
+# Behind nginx/Caddy/etc., build links from the domain and scheme the visitor used
+# (X-Forwarded-Host / X-Forwarded-Proto). Without a proxy the Host header is used as-is.
+if os.environ.get("TRUST_PROXY", "1") != "0":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
 
 
 # ---------------------------------------------------------------- database
@@ -111,9 +119,51 @@ def _close_db(_exc):
         db.close()
 
 
+SLUG_LEN = 8  # short link: /v/<first 8 hex chars of the file's MD5>
+
+
+def file_md5(path):
+    h = hashlib.md5()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def unique_slug(db, md5, exclude_id=None):
+    """Shortest free MD5 prefix (8, 10, ... chars); identical files get '-2', '-3'..."""
+    def taken(s):
+        row = db.execute("SELECT id FROM videos WHERE slug = ?", (s,)).fetchone()
+        return row is not None and row[0] != exclude_id
+    same_file = db.execute("SELECT 1 FROM videos WHERE md5 = ? AND id IS NOT ?",
+                           (md5, exclude_id)).fetchone()
+    if not same_file:  # a different file sharing the prefix: use a longer prefix
+        for n in range(SLUG_LEN, 33, 2):
+            if not taken(md5[:n]):
+                return md5[:n]
+    if not taken(md5[:SLUG_LEN]):
+        return md5[:SLUG_LEN]
+    i = 2
+    while taken(f"{md5[:SLUG_LEN]}-{i}"):
+        i += 1
+    return f"{md5[:SLUG_LEN]}-{i}"
+
+
 def init_db():
     with sqlite3.connect(DB_PATH) as db:
         db.executescript(SCHEMA)
+        # Upgrade older databases: add md5/slug and fill them in for existing videos.
+        cols = {r[1] for r in db.execute("PRAGMA table_info(videos)")}
+        for col in ("md5", "slug"):
+            if col not in cols:
+                db.execute(f"ALTER TABLE videos ADD COLUMN {col} TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_slug ON videos(slug)")
+        for vid, filename in db.execute(
+                "SELECT id, filename FROM videos WHERE slug IS NULL OR slug = '' ORDER BY id").fetchall():
+            path = os.path.join(VIDEO_DIR, filename)
+            md5 = file_md5(path) if os.path.exists(path) else hashlib.md5(f"missing-{vid}".encode()).hexdigest()
+            db.execute("UPDATE videos SET md5 = ?, slug = ? WHERE id = ?", (md5, unique_slug(db, md5, vid), vid))
+        db.commit()
 
 
 init_db()
@@ -493,7 +543,12 @@ def store_video(file, title, description, category_id, thumbnail_file=None, dura
     title = (title or "").strip() or original.rsplit(".", 1)[0]
     stored = f"{uuid.uuid4().hex}.{ext}"
     path = os.path.join(VIDEO_DIR, stored)
-    file.save(path)
+    md5 = hashlib.md5()  # hash while saving, so big files are read only once
+    with open(path, "wb") as out:
+        for chunk in iter(lambda: file.stream.read(1024 * 1024), b""):
+            md5.update(chunk)
+            out.write(chunk)
+    md5 = md5.hexdigest()
 
     duration = parse_duration(duration) or probe_duration(path)
     thumb = save_thumbnail(thumbnail_file) or generate_thumbnail(path, duration)
@@ -501,9 +556,10 @@ def store_video(file, title, description, category_id, thumbnail_file=None, dura
     db = get_db()
     cur = db.execute(
         "INSERT INTO videos (title, description, category_id, filename, original_name, mime, "
-        "size, duration, thumb, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "size, duration, thumb, created_at, md5, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (title[:200], (description or "").strip(), category_id, stored, original, mime,
-         os.path.getsize(path), duration, thumb, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+         os.path.getsize(path), duration, thumb, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+         md5, unique_slug(db, md5)),
     )
     db.commit()
     return cur.lastrowid, title
@@ -541,61 +597,103 @@ def index():
     )
 
 
-@app.route("/video/<int:vid>")
-def video(vid):
-    v = get_video(vid)
+def find_by_ref(ref):
+    """Find a video by short link (MD5 prefix) or, for old links, by numeric id."""
+    db = get_db()
+    sql = ("SELECT v.*, c.name AS category_name FROM videos v "
+           "LEFT JOIN categories c ON c.id = v.category_id WHERE ")
+    row = db.execute(sql + "v.slug = ?", (ref,)).fetchone()
+    if row is None and ref.isdigit() and len(ref) < SLUG_LEN:
+        row = db.execute(sql + "v.id = ?", (int(ref),)).fetchone()
+    return row
+
+
+def video_by_ref(ref):
+    row = find_by_ref(ref)
+    if row is None:
+        abort(404)
+    return row
+
+
+def canonical(endpoint, v, ref):
+    """Old /xxx/<id> links redirect to the short MD5 link, keeping ?t= etc."""
+    if ref != v["slug"]:
+        return redirect(url_for(endpoint, slug=v["slug"], **request.args), 301)
+    return None
+
+
+@app.route("/v/<slug>")
+def video(slug):
+    v = video_by_ref(slug)
+    resp = canonical("video", v, slug)
+    if resp:
+        return resp
     related = []
     if v["category_id"] is not None:
         related = get_db().execute(
             "SELECT * FROM videos WHERE category_id = ? AND id != ? "
-            "ORDER BY created_at DESC LIMIT 8", (v["category_id"], vid)).fetchall()
+            "ORDER BY created_at DESC LIMIT 8", (v["category_id"], v["id"])).fetchall()
     return render_template("video.html", v=v, related=related)
 
 
-@app.route("/embed/<int:vid>")
-def embed(vid):
+@app.route("/video/<int:vid>")
+def legacy_video(vid):
+    v = get_video(vid)
+    return redirect(url_for("video", slug=v["slug"], **request.args), 301)
+
+
+@app.route("/embed/<slug>")
+def embed(slug):
     """Bare player page for <iframe> embedding on other websites."""
-    return render_template("embed.html", v=get_video(vid))
+    v = video_by_ref(slug)
+    return canonical("embed", v, slug) or render_template("embed.html", v=v)
 
 
-@app.route("/qr/<int:vid>.svg")
-def qr(vid):
-    """QR code of the video's public link (for phones / WeChat)."""
-    get_video(vid)
+@app.route("/qr/<slug>.svg")
+def qr(slug):
+    """QR code of the video's public link on the domain being visited (for phones / WeChat)."""
+    v = video_by_ref(slug)
     try:
         import segno
     except ImportError:
         abort(404)
     buf = io.BytesIO()
-    segno.make(url_for("video", vid=vid, _external=True), error="m").save(
+    segno.make(url_for("video", slug=v["slug"], _external=True), error="m").save(
         buf, kind="svg", scale=6, border=2, dark="#000", light="#fff")
     resp = Response(buf.getvalue(), mimetype="image/svg+xml")
-    resp.cache_control.max_age = 86400
+    resp.cache_control.max_age = 3600
+    resp.vary.add("Host")
+    resp.vary.add("X-Forwarded-Host")
     return resp
 
 
-@app.route("/media/<int:vid>")
-def media(vid):
-    v = get_video(vid)
+@app.route("/media/<slug>")
+def media(slug):
+    v = video_by_ref(slug)
     mime = v["mime"] or mimetypes.guess_type(v["original_name"])[0] or "application/octet-stream"
     return send_from_directory(VIDEO_DIR, v["filename"], mimetype=mime, conditional=True)
 
 
-@app.route("/download/<int:vid>")
-def download(vid):
-    v = get_video(vid)
+@app.route("/download/<slug>")
+def download(slug):
+    v = video_by_ref(slug)
     return send_from_directory(VIDEO_DIR, v["filename"], as_attachment=True,
                                download_name=v["original_name"])
 
 
-@app.route("/thumb/<int:vid>")
-def thumb(vid):
-    v = get_video(vid)
+@app.route("/thumb/<slug>")
+def thumb(slug):
+    v = video_by_ref(slug)
     if not v["thumb"]:
         abort(404)
     resp = send_from_directory(THUMB_DIR, v["thumb"])
     resp.cache_control.max_age = 86400
     return resp
+
+
+def video_link(vid):
+    row = get_db().execute("SELECT slug FROM videos WHERE id = ?", (vid,)).fetchone()
+    return url_for("video", slug=row["slug"])
 
 
 # ---------------------------------------------------------------- login
@@ -639,7 +737,7 @@ def upload():
     except UploadError as e:
         return failed(str(e), url_for("upload"))
     flash(_("Uploaded “{title}”.", title=title), "ok")
-    return done(url_for("video", vid=vid))
+    return done(video_link(vid))
 
 
 @app.route("/video/<int:vid>/edit", methods=["GET", "POST"])
@@ -667,7 +765,7 @@ def edit(vid):
     )
     db.commit()
     flash(_("Changes saved."), "ok")
-    return done(url_for("video", vid=vid))
+    return done(video_link(vid))
 
 
 @app.route("/video/<int:vid>/delete", methods=["POST"])
@@ -792,6 +890,8 @@ def account():
 def video_json(v):
     return {
         "id": v["id"],
+        "slug": v["slug"],
+        "md5": v["md5"],
         "title": v["title"],
         "description": v["description"],
         "category": ({"id": v["category_id"], "name": v["category_name"]}
@@ -801,10 +901,11 @@ def video_json(v):
         "duration": v["duration"],
         "created_at": v["created_at"],
         "urls": {
-            "page": url_for("video", vid=v["id"], _external=True),
-            "stream": url_for("media", vid=v["id"], _external=True),
-            "download": url_for("download", vid=v["id"], _external=True),
-            "thumbnail": url_for("thumb", vid=v["id"], _external=True) if v["thumb"] else None,
+            "page": url_for("video", slug=v["slug"], _external=True),
+            "embed": url_for("embed", slug=v["slug"], _external=True),
+            "stream": url_for("media", slug=v["slug"], _external=True),
+            "download": url_for("download", slug=v["slug"], _external=True),
+            "thumbnail": url_for("thumb", slug=v["slug"], _external=True) if v["thumb"] else None,
         },
     }
 
@@ -842,10 +943,15 @@ def api_list_videos():
     return jsonify([video_json(v) for v in rows])
 
 
-@app.get("/api/<key>/videos/<int:vid>")
+def api_find(ref):
+    """API accepts either the numeric id or the short link (slug)."""
+    return find_by_ref(ref) or (find_video(int(ref)) if ref.isdigit() else None)
+
+
+@app.get("/api/<key>/videos/<ref>")
 @api_enabled
-def api_get_video(vid):
-    v = find_video(vid)
+def api_get_video(ref):
+    v = api_find(ref)
     return jsonify(video_json(v)) if v else api_error("Video not found.", 404)
 
 
@@ -871,17 +977,18 @@ def api_upload_video():
         return api_error(str(e))
     resp = jsonify(video_json(find_video(vid)))
     resp.status_code = 201
-    resp.headers["Location"] = api_url("api_get_video", vid=vid)
+    resp.headers["Location"] = api_url("api_get_video", ref=find_video(vid)["slug"])
     return resp
 
 
-@app.route("/api/<key>/videos/<int:vid>", methods=["PATCH"])
+@app.route("/api/<key>/videos/<ref>", methods=["PATCH"])
 @api_enabled
 @token_required
-def api_update_video(vid):
-    v = find_video(vid)
+def api_update_video(ref):
+    v = api_find(ref)
     if not v:
         return api_error("Video not found.", 404)
+    vid = v["id"]
     data = request.get_json(silent=True) or request.form
     title = str(data.get("title", v["title"])).strip()
     if not title:
@@ -900,15 +1007,15 @@ def api_update_video(vid):
     return jsonify(video_json(find_video(vid)))
 
 
-@app.delete("/api/<key>/videos/<int:vid>")
+@app.delete("/api/<key>/videos/<ref>")
 @api_enabled
 @token_required
-def api_delete_video(vid):
-    v = find_video(vid)
+def api_delete_video(ref):
+    v = api_find(ref)
     if not v:
         return api_error("Video not found.", 404)
     delete_video_row(v)
-    return jsonify(ok=True, deleted=vid)
+    return jsonify(ok=True, deleted=v["id"], slug=v["slug"])
 
 
 # ---------------------------------------------------------------- errors
