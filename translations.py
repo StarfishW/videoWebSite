@@ -108,11 +108,35 @@ ZH = {
     "Upload videos directly from scripts or other programs, without opening the website.":
         "无需打开网站，即可通过脚本或其他程序直接上传视频。",
     "Your API token": "你的 API 令牌",
-    "Send it with every write request as the header": "每个写入请求都需要带上请求头",
     "Keep it secret - anyone with it can upload and delete videos.": "请妥善保管——拿到令牌的人可以上传和删除视频。",
-    "Regenerate": "重新生成",
     "Create a new token? The current token will stop working.": "确定生成新令牌吗？当前令牌将失效。",
-    "This token is set by the VIDEO_API_TOKEN environment variable.": "此令牌由环境变量 VIDEO_API_TOKEN 设置。",
+    "The API is off.": "API 已关闭。",
+    "Turn it on to get a randomly generated secret API URL and token. Nothing is reachable through the API until then.":
+        "开启后会随机生成一个保密的 API 地址和令牌。开启之前，无法通过 API 访问任何内容。",
+    "Turn on API and generate URL": "开启 API 并生成地址",
+    "Your API URL": "你的 API 地址",
+    "This address is random and secret. Anyone who has it can see the video list through the API, so share it only with programs you trust.":
+        "这个地址是随机生成且保密的。拿到地址的人可以通过 API 查看视频列表，请只提供给你信任的程序。",
+    "Generate a new URL? The current URL will stop working.": "确定生成新地址吗？当前地址将失效。",
+    "New URL": "生成新地址",
+    "Uploading, editing and deleting also need this token in the header": "上传、编辑和删除还需要在请求头中带上此令牌",
+    "New token": "生成新令牌",
+    "Show real URL and token in examples": "在示例中显示真实地址和令牌",
+    "All paths are relative to your API URL.": "以下路径都接在你的 API 地址后面。",
+    "Turn off API": "关闭 API",
+    "Turning the API off deletes the URL and token. Turning it on again creates new ones.":
+        "关闭 API 会删除当前地址和令牌，重新开启时会生成新的。",
+    "Turn off the API? Programs using it will stop working.": "确定关闭 API 吗？正在使用它的程序将无法工作。",
+
+    # password page
+    "Password": "密码",
+    "Change password": "修改密码",
+    "You are still using the default password. Please change it.": "你仍在使用默认密码，请尽快修改。",
+    "Username: {user}": "用户名：{user}",
+    "Current password": "当前密码",
+    "New password": "新密码",
+    "Repeat new password": "再次输入新密码",
+    "At least {n} characters. Changing it logs out all other devices.": "至少 {n} 个字符。修改后，其他设备会被退出登录。",
     "Only the file is required. A category that does not exist yet is created automatically.":
         "只有文件是必填项。不存在的分类会自动创建。",
     "Thumbnail and duration are generated on the server.": "缩略图和时长由服务器自动生成。",
@@ -150,9 +174,15 @@ ZH = {
     "A category named “{name}” already exists.": "名为“{name}”的分类已存在。",
     "Category renamed.": "分类已重命名。",
     "Category deleted. Its videos are now uncategorized.": "分类已删除，其中的视频已变为未分类。",
-    "The API token is set by the VIDEO_API_TOKEN environment variable and can't be changed here.":
-        "API 令牌由环境变量 VIDEO_API_TOKEN 设置，无法在此修改。",
     "New API token created. The old token no longer works.": "已生成新的 API 令牌，旧令牌已失效。",
+    "API turned on with a new random URL and token.": "API 已开启，并生成了新的随机地址和令牌。",
+    "New API URL created. The old URL no longer works.": "已生成新的 API 地址，旧地址已失效。",
+    "API turned off.": "API 已关闭。",
+    "Current password is wrong.": "当前密码不正确。",
+    "The new password must be at least {n} characters.": "新密码至少需要 {n} 个字符。",
+    "The two new passwords don't match.": "两次输入的新密码不一致。",
+    "The new password is the same as the current one.": "新密码与当前密码相同。",
+    "Password changed. Other devices have been logged out.": "密码已修改，其他设备已退出登录。",
     "File is too large (limit is {gb} GB).": "文件太大（上限为 {gb} GB）。",
 
     # JavaScript

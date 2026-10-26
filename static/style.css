@@ -246,3 +246,9 @@ pre code { background: none; padding: 0; font-size: .82rem; line-height: 1.55; }
 .api-table td:first-child { white-space: nowrap; }
 .api-table td:nth-child(2) { text-align: center; color: var(--accent); }
 @media (max-width: 640px) { .api-table td:first-child { white-space: normal; } }
+
+/* ---------- callouts */
+.callout { padding: 14px 16px; border-radius: var(--radius); background: var(--accent-soft); margin: 14px 0; }
+.callout p { margin: 0 0 12px; }
+.callout.warn { background: var(--err-bg); color: var(--err-text); margin-top: 0; }
+.inline-check { display: inline-flex; margin: 6px 0 0; }

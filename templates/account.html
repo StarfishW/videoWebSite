@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Change password') }} · {{ site_name }}{% endblock %}
+{% block content %}
+<form class="panel narrow" method="post" action="{{ url_for('account') }}">
+  <h1>{{ _('Change password') }}</h1>
+  {% if is_default %}
+    <p class="callout warn">{{ _('You are still using the default password. Please change it.') }}</p>
+  {% endif %}
+  <p class="hint">{{ _('Username: {user}', user=user) }}</p>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="text" name="username" value="{{ user }}" autocomplete="username" hidden>
+  <label>{{ _('Current password') }}
+    <input name="current" type="password" autocomplete="current-password" required autofocus></label>
+  <label>{{ _('New password') }}
+    <input name="new" type="password" autocomplete="new-password" minlength="{{ min_len }}" required></label>
+  <label>{{ _('Repeat new password') }}
+    <input name="confirm" type="password" autocomplete="new-password" minlength="{{ min_len }}" required></label>
+  <p class="hint">{{ _('At least {n} characters. Changing it logs out all other devices.', n=min_len) }}</p>
+  <button class="btn primary block" type="submit">{{ _('Change password') }}</button>
+</form>
+{% endblock %}

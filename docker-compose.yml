@@ -10,8 +10,5 @@ services:
       VIDEO_ADMIN_USER: ${VIDEO_ADMIN_USER:-admin}
       VIDEO_ADMIN_PASS: ${VIDEO_ADMIN_PASS:-admin}
       VIDEO_MAX_UPLOAD_GB: ${VIDEO_MAX_UPLOAD_GB:-20}
-      SITE_NAME: ${SITE_NAME:-Video Library}
-      # Leave empty to auto-generate a token (shown on the API page after login).
-      VIDEO_API_TOKEN: ${VIDEO_API_TOKEN:-}
-    volumes:
+      SITE_NAME: ${SITE_NAME:-Video Library}    volumes:
       - ./data:/app/data

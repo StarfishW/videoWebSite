@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
                    request, send_from_directory, session, url_for)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from translations import DEFAULT_LANG, JS_STRINGS, LANGUAGES, translate
 
@@ -34,8 +35,7 @@ SITE_NAME = os.environ.get("SITE_NAME", "Video Library")
 ADMIN_USER = os.environ.get("VIDEO_ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("VIDEO_ADMIN_PASS", "admin")
 MAX_UPLOAD_GB = float(os.environ.get("VIDEO_MAX_UPLOAD_GB", "20"))
-API_TOKEN_ENV = os.environ.get("VIDEO_API_TOKEN", "").strip()
-API_TOKEN_FILE = os.path.join(DATA_DIR, "api_token")
+MIN_PASSWORD_LEN = 6
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -63,6 +63,10 @@ CREATE TABLE IF NOT EXISTS videos (
     created_at    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_videos_category ON videos(category_id);
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -112,6 +116,23 @@ def init_db():
 
 
 init_db()
+
+
+def get_setting(key, default=None):
+    row = get_db().execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row and row["value"] is not None else default
+
+
+def set_settings(**values):
+    """Set (or with None, delete) several settings in one transaction."""
+    db = get_db()
+    for key, value in values.items():
+        if value is None:
+            db.execute("DELETE FROM settings WHERE key = ?", (key,))
+        else:
+            db.execute("INSERT INTO settings (key, value) VALUES (?, ?) "
+                       "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, str(value)))
+    db.commit()
 
 
 def find_video(vid):
@@ -186,8 +207,27 @@ def set_language(code):
 
 # ---------------------------------------------------------------- auth / csrf
 
+def safe_equal(a, b):
+    """Constant-time comparison that also works for non-ASCII text."""
+    return hmac.compare_digest(str(a).encode("utf-8"), str(b).encode("utf-8"))
+
+
+def password_version():
+    return get_setting("password_version", "0")
+
+
+def check_login(user, pw):
+    if not safe_equal(user, ADMIN_USER):
+        return False
+    stored = get_setting("password_hash")
+    if stored:  # password changed in the web interface
+        return check_password_hash(stored, pw)
+    return safe_equal(pw, ADMIN_PASS)
+
+
 def is_admin():
-    return session.get("admin") is True
+    # Changing the password bumps the version, which logs out every other session.
+    return session.get("admin") is True and session.get("pwv") == password_version()
 
 
 def is_api():
@@ -209,20 +249,41 @@ def admin_required(view):
     return wrapped
 
 
+def api_key():
+    """Random secret part of the API URL; None while the API is off."""
+    return get_setting("api_key")
+
+
 def api_token():
-    return API_TOKEN_ENV or _read_or_create(API_TOKEN_FILE, lambda: secrets.token_urlsafe(32))
+    return get_setting("api_token")
+
+
+def api_enabled(view):
+    """Every API route lives under /api/<random key>/. Wrong key or API off -> 404."""
+    @functools.wraps(view)
+    def wrapped(key, *args, **kwargs):
+        expected = api_key()
+        if not expected or not safe_equal(key, expected):
+            return api_error("Not found.", 404)
+        return view(*args, **kwargs)
+    return wrapped
 
 
 def token_required(view):
-    """API auth: 'Authorization: Bearer <token>' or 'X-API-Key: <token>'."""
+    """Write access also needs 'Authorization: Bearer <token>' or 'X-API-Key: <token>'."""
     @functools.wraps(view)
     def wrapped(*args, **kwargs):
         auth = request.headers.get("Authorization", "")
         sent = auth[7:].strip() if auth.lower().startswith("bearer ") else request.headers.get("X-API-Key", "")
-        if not sent or not hmac.compare_digest(sent, api_token()):
+        token = api_token()
+        if not sent or not token or not safe_equal(sent, token):
             return api_error("Missing or invalid API token.", 401)
         return view(*args, **kwargs)
     return wrapped
+
+
+def api_url(endpoint, **values):
+    return url_for(endpoint, key=api_key(), _external=True, **values)
 
 
 def csrf_token():
@@ -236,7 +297,7 @@ def _csrf_protect():
     if request.method == "POST" and not is_api():
         expected = session.get("csrf")
         sent = request.form.get("csrf") or request.headers.get("X-CSRF-Token")
-        if not expected or not sent or not hmac.compare_digest(expected, sent):
+        if not expected or not sent or not safe_equal(expected, sent):
             msg = _("Form expired - reload the page and try again.")
             if wants_json():
                 return jsonify(ok=False, error=msg), 400
@@ -521,9 +582,10 @@ def login():
     if request.method == "POST":
         user = request.form.get("username", "")
         pw = request.form.get("password", "")
-        if hmac.compare_digest(user, ADMIN_USER) and hmac.compare_digest(pw, ADMIN_PASS):
+        if check_login(user, pw):
             session.clear()
             session["admin"] = True
+            session["pwv"] = password_version()
             session.permanent = True
             flash(_("Logged in. You can now upload and edit videos."), "ok")
             return redirect(safe_next(request.form.get("next")))
@@ -645,26 +707,61 @@ def delete_category(cid):
     return redirect(url_for("categories"))
 
 
-# ---------------------------------------------------------------- admin: API token page
+# ---------------------------------------------------------------- admin: API settings
 
 @app.route("/api-docs")
 @admin_required
 def api_docs():
-    return render_template("api.html", token=api_token(), token_from_env=bool(API_TOKEN_ENV),
-                           base=request.host_url.rstrip("/"), ffmpeg=bool(FFMPEG),
-                           max_gb=MAX_UPLOAD_GB)
+    key = api_key()
+    return render_template("api.html", enabled=bool(key), token=api_token() or "",
+                           base=(request.host_url.rstrip("/") + f"/api/{key}") if key else "",
+                           ffmpeg=bool(FFMPEG), max_gb=MAX_UPLOAD_GB)
 
 
-@app.route("/api-docs/regenerate", methods=["POST"])
+@app.route("/api-docs/<action>", methods=["POST"])
 @admin_required
-def regenerate_token():
-    if API_TOKEN_ENV:
-        flash(_("The API token is set by the VIDEO_API_TOKEN environment variable and can't be changed here."), "error")
-    else:
-        with open(API_TOKEN_FILE, "w", encoding="utf-8") as fh:
-            fh.write(secrets.token_urlsafe(32))
+def api_settings(action):
+    new_key, new_token = secrets.token_urlsafe(24), secrets.token_urlsafe(32)
+    if action == "enable":
+        set_settings(api_key=new_key, api_token=new_token)
+        flash(_("API turned on with a new random URL and token."), "ok")
+    elif action == "new-url" and api_key():
+        set_settings(api_key=new_key)
+        flash(_("New API URL created. The old URL no longer works."), "ok")
+    elif action == "new-token" and api_key():
+        set_settings(api_token=new_token)
         flash(_("New API token created. The old token no longer works."), "ok")
+    elif action == "disable":
+        set_settings(api_key=None, api_token=None)
+        flash(_("API turned off."), "ok")
     return redirect(url_for("api_docs"))
+
+
+# ---------------------------------------------------------------- admin: password
+
+@app.route("/account", methods=["GET", "POST"])
+@admin_required
+def account():
+    if request.method == "POST":
+        current = request.form.get("current", "")
+        new = request.form.get("new", "")
+        if not check_login(ADMIN_USER, current):
+            flash(_("Current password is wrong."), "error")
+        elif len(new) < MIN_PASSWORD_LEN:
+            flash(_("The new password must be at least {n} characters.", n=MIN_PASSWORD_LEN), "error")
+        elif new != request.form.get("confirm", ""):
+            flash(_("The two new passwords don't match."), "error")
+        elif new == current:
+            flash(_("The new password is the same as the current one."), "error")
+        else:
+            version = str(int(password_version()) + 1)
+            set_settings(password_hash=generate_password_hash(new), password_version=version)
+            session["pwv"] = version  # stay logged in here; other sessions are logged out
+            flash(_("Password changed. Other devices have been logged out."), "ok")
+            return redirect(url_for("account"))
+        return redirect(url_for("account"))
+    return render_template("account.html", user=ADMIN_USER, min_len=MIN_PASSWORD_LEN,
+                           is_default=not get_setting("password_hash") and ADMIN_PASS == "admin")
 
 
 # ---------------------------------------------------------------- REST API
@@ -689,12 +786,14 @@ def video_json(v):
     }
 
 
-@app.get("/api/categories")
+@app.get("/api/<key>/categories")
+@api_enabled
 def api_categories():
     return jsonify([{"id": c["id"], "name": c["name"], "count": c["n"]} for c in all_categories()])
 
 
-@app.post("/api/categories")
+@app.post("/api/<key>/categories")
+@api_enabled
 @token_required
 def api_create_category():
     data = request.get_json(silent=True) or request.form
@@ -707,7 +806,8 @@ def api_create_category():
     return jsonify(id=cid, name=row["name"]), (200 if existed else 201)
 
 
-@app.get("/api/videos")
+@app.get("/api/<key>/videos")
+@api_enabled
 def api_list_videos():
     try:
         limit = min(max(int(request.args.get("limit", 100)), 1), 1000)
@@ -719,13 +819,15 @@ def api_list_videos():
     return jsonify([video_json(v) for v in rows])
 
 
-@app.get("/api/videos/<int:vid>")
+@app.get("/api/<key>/videos/<int:vid>")
+@api_enabled
 def api_get_video(vid):
     v = find_video(vid)
     return jsonify(video_json(v)) if v else api_error("Video not found.", 404)
 
 
-@app.post("/api/videos")
+@app.post("/api/<key>/videos")
+@api_enabled
 @token_required
 def api_upload_video():
     """multipart/form-data: file (required), title, description,
@@ -746,11 +848,12 @@ def api_upload_video():
         return api_error(str(e))
     resp = jsonify(video_json(find_video(vid)))
     resp.status_code = 201
-    resp.headers["Location"] = url_for("api_get_video", vid=vid, _external=True)
+    resp.headers["Location"] = api_url("api_get_video", vid=vid)
     return resp
 
 
-@app.route("/api/videos/<int:vid>", methods=["PATCH"])
+@app.route("/api/<key>/videos/<int:vid>", methods=["PATCH"])
+@api_enabled
 @token_required
 def api_update_video(vid):
     v = find_video(vid)
@@ -774,7 +877,8 @@ def api_update_video(vid):
     return jsonify(video_json(find_video(vid)))
 
 
-@app.delete("/api/videos/<int:vid>")
+@app.delete("/api/<key>/videos/<int:vid>")
+@api_enabled
 @token_required
 def api_delete_video(vid):
     v = find_video(vid)
@@ -815,7 +919,16 @@ if __name__ == "__main__":
     parser.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"),
                         help="use 0.0.0.0 to allow other devices on your network")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "5000")))
+    parser.add_argument("--reset-password", action="store_true",
+                        help="forget the password set in the web interface and go back to "
+                             "VIDEO_ADMIN_PASS (default: admin), then exit")
     args = parser.parse_args()
+    if args.reset_password:
+        with app.app_context():
+            set_settings(password_hash=None,
+                         password_version=str(int(password_version()) + 1))
+        print("Password reset. Log in with the VIDEO_ADMIN_PASS password (default: admin).")
+        raise SystemExit(0)
     try:
         from waitress import serve  # optional, more robust server
         print(f"Serving on http://{args.host}:{args.port} (waitress)")
