@@ -1,5 +1,24 @@
 {% extends "base.html" %}
+{% set page_url = url_for('video', vid=v.id, _external=True) %}
+{% set embed_url = url_for('embed', vid=v.id, _external=True) %}
 {% block title %}{{ v.title }} · {{ site_name }}{% endblock %}
+{% block head %}
+  {# Link previews in chat apps / social sites #}
+  <meta name="description" content="{{ (v.description or site_name)|truncate(200) }}">
+  <link rel="canonical" href="{{ page_url }}">
+  <meta property="og:site_name" content="{{ site_name }}">
+  <meta property="og:type" content="video.other">
+  <meta property="og:title" content="{{ v.title }}">
+  <meta property="og:description" content="{{ (v.description or site_name)|truncate(200) }}">
+  <meta property="og:url" content="{{ page_url }}">
+  {% if v.thumb %}<meta property="og:image" content="{{ url_for('thumb', vid=v.id, _external=True) }}">{% endif %}
+  <meta property="og:video" content="{{ url_for('media', vid=v.id, _external=True) }}">
+  <meta property="og:video:type" content="{{ v.mime or 'video/mp4' }}">
+  {% if v.duration %}<meta property="video:duration" content="{{ v.duration|int }}">{% endif %}
+  <meta name="twitter:card" content="{{ 'summary_large_image' if v.thumb else 'summary' }}">
+  <meta name="twitter:title" content="{{ v.title }}">
+  {% if v.thumb %}<meta name="twitter:image" content="{{ url_for('thumb', vid=v.id, _external=True) }}">{% endif %}
+{% endblock %}
 {% block content %}
 <div class="watch">
   <div class="watch-main">
@@ -22,7 +41,8 @@
         <span>{{ v.size|filesize }}</span>
       </div>
       <div class="actions">
-        <a class="btn primary" href="{{ url_for('download', vid=v.id) }}">&#8681; {{ _('Download') }}</a>
+        <button class="btn primary" type="button" id="share-open">&#10150; {{ _('Share') }}</button>
+        <a class="btn" href="{{ url_for('download', vid=v.id) }}">&#8681; {{ _('Download') }}</a>
         {% if is_admin %}
           <a class="btn" href="{{ url_for('edit', vid=v.id) }}">{{ _('Edit') }}</a>
           <form action="{{ url_for('delete', vid=v.id) }}" method="post" class="inline"
@@ -51,15 +71,101 @@
   </aside>
   {% endif %}
 </div>
+
+<dialog id="share-dialog" class="share-dialog" aria-labelledby="share-title">
+  <div class="dialog-head">
+    <h2 id="share-title">{{ _('Share video') }}</h2>
+    <button class="btn ghost" type="button" id="share-close" aria-label="{{ _('Close') }}">&#10005;</button>
+  </div>
+  <p class="hint">{{ _('Anyone with the link can watch online - no login needed.') }}</p>
+
+  <span class="label">{{ _('Link') }}</span>
+  <div class="row copy-row">
+    <input id="share-link" readonly value="{{ page_url }}" aria-label="{{ _('Link') }}">
+    <button class="btn primary" type="button" data-copy="share-link">{{ _('Copy') }}</button>
+  </div>
+  <label class="check"><input type="checkbox" id="share-at-time"> {{ _('Start at') }} <span id="share-time">0:00</span></label>
+
+  <div class="share-grid">
+    <div>
+      <span class="label">{{ _('Embed on a website') }}</span>
+      <div class="row copy-row top">
+        <textarea id="share-embed" rows="4" readonly aria-label="{{ _('Embed on a website') }}"></textarea>
+        <button class="btn" type="button" data-copy="share-embed">{{ _('Copy') }}</button>
+      </div>
+      <button class="btn" type="button" id="share-native" hidden>{{ _('More sharing options…') }}</button>
+    </div>
+    <figure class="qr">
+      <img src="{{ url_for('qr', vid=v.id) }}" alt="{{ _('QR code') }}" width="148" height="148"
+           onerror="this.parentNode.hidden = true">
+      <figcaption>{{ _('Scan with a phone to watch') }}</figcaption>
+    </figure>
+  </div>
+</dialog>
 {% endblock %}
 {% block scripts %}
 <script>
   (function () {
-    var src = document.querySelector('.player source');
+    var player = document.querySelector('.player');
+    var src = player.querySelector('source');
     src.addEventListener('error', function () { document.getElementById('noplay').hidden = false; });
     document.querySelectorAll('form[data-confirm]').forEach(function (f) {
       f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); });
     });
+
+    // ?t=90 in a shared link starts playback at that second
+    var t = parseInt(new URLSearchParams(location.search).get('t'), 10);
+    if (t > 0) player.addEventListener('loadedmetadata', function () { player.currentTime = t; }, { once: true });
+
+    var PAGE = {{ page_url|tojson }}, EMBED = {{ embed_url|tojson }}, TITLE = {{ v.title|tojson }};
+    var dialog = document.getElementById('share-dialog');
+    var link = document.getElementById('share-link');
+    var embed = document.getElementById('share-embed');
+    var atTime = document.getElementById('share-at-time');
+    var timeLabel = document.getElementById('share-time');
+
+    function fmt(s) {
+      s = Math.floor(s); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+      return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(sec).padStart(2, '0');
+    }
+    function startSecond() { return atTime.checked ? Math.floor(player.currentTime) : 0; }
+    function refresh() {
+      var s = startSecond(), q = s > 0 ? '?t=' + s : '';
+      link.value = PAGE + q;
+      embed.value = '<iframe src="' + EMBED + q + '" width="640" height="360" frameborder="0" ' +
+        'allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="' +
+        TITLE.replace(/"/g, '&quot;') + '"></iframe>';
+    }
+
+    document.getElementById('share-open').addEventListener('click', function () {
+      timeLabel.textContent = fmt(player.currentTime || 0);
+      atTime.checked = false;
+      atTime.disabled = !(player.currentTime >= 1);
+      refresh();
+      if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
+      link.select();
+    });
+    document.getElementById('share-close').addEventListener('click', function () { dialog.close(); });
+    dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });  // backdrop
+    atTime.addEventListener('change', refresh);
+
+    document.querySelectorAll('[data-copy]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var field = document.getElementById(btn.dataset.copy), label = btn.textContent;
+        function ok() { btn.textContent = I18N['Copied']; setTimeout(function () { btn.textContent = label; }, 1500); }
+        function fallback() { field.select(); document.execCommand('copy'); ok(); }  // plain-HTTP sites
+        if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(field.value).then(ok, fallback);
+        else fallback();
+      });
+    });
+
+    var native = document.getElementById('share-native');
+    if (navigator.share) {
+      native.hidden = false;
+      native.addEventListener('click', function () {
+        navigator.share({ title: TITLE, url: link.value }).catch(function () {});
+      });
+    }
   })();
 </script>
 {% endblock %}

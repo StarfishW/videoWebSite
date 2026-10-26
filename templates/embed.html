@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="{{ 'zh-CN' if lang == 'zh' else lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ v.title }} · {{ site_name }}</title>
+  <meta name="robots" content="noindex">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    video { width: 100%; height: 100%; display: block; background: #000; }
+    a.brand {
+      position: absolute; top: 8px; left: 8px; max-width: calc(100% - 16px);
+      padding: 4px 10px; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff;
+      font: 600 13px/1.4 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; text-decoration: none;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; transition: opacity .2s;
+    }
+    body:hover a.brand, video.paused + a.brand { opacity: 1; }
+  </style>
+</head>
+<body>
+  <video id="v" controls playsinline preload="metadata"
+         {% if v.thumb %}poster="{{ url_for('thumb', vid=v.id) }}"{% endif %}>
+    <source src="{{ url_for('media', vid=v.id) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
+  </video>
+  <a class="brand" href="{{ url_for('video', vid=v.id, _external=True) }}" target="_blank" rel="noopener">{{ v.title }} · {{ _('Watch on {site}', site=site_name) }}</a>
+  <script>
+    (function () {
+      var v = document.getElementById('v');
+      var t = parseInt(new URLSearchParams(location.search).get('t'), 10);
+      if (t > 0) v.addEventListener('loadedmetadata', function () { v.currentTime = t; }, { once: true });
+      function mark() { v.classList.toggle('paused', v.paused); }
+      v.addEventListener('play', mark); v.addEventListener('pause', mark); mark();
+    })();
+  </script>
+</body>
+</html>

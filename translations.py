@@ -59,6 +59,17 @@ ZH = {
     "Delete this video permanently? This cannot be undone.": "确定永久删除这个视频吗？此操作无法撤销。",
     "File: {name}": "文件：{name}",
     "More in {category}": "更多「{category}」视频",
+    "Share": "分享",
+    "Share video": "分享视频",
+    "Close": "关闭",
+    "Anyone with the link can watch online - no login needed.": "任何拿到链接的人都可以在线观看，无需登录。",
+    "Link": "链接",
+    "Start at": "从此处开始播放：",
+    "Embed on a website": "嵌入到网页",
+    "More sharing options…": "更多分享方式…",
+    "QR code": "二维码",
+    "Scan with a phone to watch": "用手机扫码观看",
+    "Watch on {site}": "在 {site} 观看",
 
     # login
     "Log in": "登录",

@@ -7,6 +7,7 @@ API:  see /api-docs after logging in
 import argparse
 import functools
 import hmac
+import io
 import mimetypes
 import os
 import secrets
@@ -17,7 +18,7 @@ import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
-from flask import (Flask, abort, flash, g, jsonify, redirect, render_template,
+from flask import (Flask, Response, abort, flash, g, jsonify, redirect, render_template,
                    request, send_from_directory, session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -549,6 +550,28 @@ def video(vid):
             "SELECT * FROM videos WHERE category_id = ? AND id != ? "
             "ORDER BY created_at DESC LIMIT 8", (v["category_id"], vid)).fetchall()
     return render_template("video.html", v=v, related=related)
+
+
+@app.route("/embed/<int:vid>")
+def embed(vid):
+    """Bare player page for <iframe> embedding on other websites."""
+    return render_template("embed.html", v=get_video(vid))
+
+
+@app.route("/qr/<int:vid>.svg")
+def qr(vid):
+    """QR code of the video's public link (for phones / WeChat)."""
+    get_video(vid)
+    try:
+        import segno
+    except ImportError:
+        abort(404)
+    buf = io.BytesIO()
+    segno.make(url_for("video", vid=vid, _external=True), error="m").save(
+        buf, kind="svg", scale=6, border=2, dark="#000", light="#fff")
+    resp = Response(buf.getvalue(), mimetype="image/svg+xml")
+    resp.cache_control.max_age = 86400
+    return resp
 
 
 @app.route("/media/<int:vid>")
