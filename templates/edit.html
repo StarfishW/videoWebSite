@@ -11,6 +11,15 @@
       <label>{{ _('Title') }} <input name="title" maxlength="200" value="{{ v.title }}" required></label>
       {% with selected = (v.category_id|string if v.category_id is not none else '') %}{% include "_category_field.html" %}{% endwith %}
       <label>{{ _('Description') }} <textarea name="description" rows="5">{{ v.description }}</textarea></label>
+      <fieldset class="problem-fields">
+        <legend>{{ _('Algorithm problem') }}</legend>
+        <p class="hint">{{ _('Used by the problem list in the Algorithms section. Videos with the same series and number are shown as versions of one problem.') }}</p>
+        <div class="row wrap">
+          <label class="grow">{{ _('Series') }} <input name="series" maxlength="80" value="{{ v.series or '' }}" placeholder="LeetCode"></label>
+          <label class="no-field">{{ _('No.') }} <input name="problem_no" inputmode="numeric" pattern="[0-9]*" maxlength="6" value="{{ v.problem_no if v.problem_no is not none else '' }}" placeholder="42"></label>
+        </div>
+        <label>{{ _('Problem') }} <input name="problem" maxlength="120" value="{{ v.problem or '' }}" placeholder="{{ _('e.g. Trapping Rain Water') }}"></label>
+      </fieldset>
       <p class="hint">{{ _('Uploaded {date}', date=v.created_at|date) }} &middot; {{ v.original_name }} &middot; {{ v.size|filesize }}</p>
     </div>
     <div>

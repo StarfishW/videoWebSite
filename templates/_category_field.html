@@ -2,12 +2,26 @@
 <label>{{ _('Category') }}
   <select name="category" data-category-select>
     <option value="">— {{ _('Uncategorized') }} —</option>
-    {% for c in categories %}
-      <option value="{{ c.id }}" {{ 'selected' if selected == c.id|string }}>{{ c.name }}</option>
+    {% for s in sections %}
+      {% set cats = categories|selectattr('section', 'equalto', s)|list %}
+      {% if cats %}
+        <optgroup label="{{ _(section_labels[s]) }}">
+          {% for c in cats %}
+            <option value="{{ c.id }}" {{ 'selected' if selected == c.id|string }}>{{ c.name }}</option>
+          {% endfor %}
+        </optgroup>
+      {% endif %}
     {% endfor %}
     <option value="__new__">+ {{ _('New category…') }}</option>
   </select>
 </label>
-<label data-new-category hidden>{{ _('New category name') }}
-  <input name="new_category" maxlength="80" placeholder="{{ _('e.g. Mathematics') }}">
-</label>
+<div class="new-category" data-new-category hidden>
+  <label>{{ _('New category name') }}
+    <input name="new_category" maxlength="80" placeholder="{{ _('e.g. Mathematics') }}">
+  </label>
+  <label>{{ _('Section') }}
+    <select name="new_section">
+      {% for s in sections %}<option value="{{ s }}" {{ 'selected' if s == 'science' }}>{{ _(section_labels[s]) }}</option>{% endfor %}
+    </select>
+  </label>
+</div>

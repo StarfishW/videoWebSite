@@ -38,6 +38,12 @@ To let other computers/phones on your network use it: `python app.py --host 0.0.
 
 ## Features
 
+- **Three sections:** Algorithms, AI Tutorials and Popular Science. Each category belongs to one
+  section (set on the Categories page). The home page shows all three, plus recent uploads.
+- **Algorithms page:** the problem list on the left (grouped by series, e.g. LeetCode, sorted by number,
+  with a filter box). Click a problem to play it on the right; tabs switch between its style versions.
+  A video's problem (series, number and name) is detected from descriptions like
+  `LeetCode 第42题：接雨水。` or `算法思维 · 倒着学 第1课：滑动窗口。`, and can be changed on its Edit page.
 - **Upload** with drag & drop and a progress bar. A thumbnail is captured from the video
   automatically in your browser, or you can choose your own image.
 - **Thumbnails, upload date, category and duration** shown on every video card.
@@ -74,13 +80,13 @@ Paths below are relative to your API URL.
 
 | Request | Token | What it does |
 |---|---|---|
-| `POST /videos` | yes | Upload (multipart): `file` (required), `title`, `description`, `category` (name, created if new) or `category_id`, `thumbnail` |
+| `POST /videos` | yes | Upload (multipart): `file` (required), `title`, `description`, `category` (name, created if new) or `category_id`, `thumbnail`; optional `series`, `problem_no`, `problem` (otherwise detected from the description) |
 | `GET /videos` | yes | List; optional `category=<id>\|none`, `q`, `sort=new\|old\|title`, `limit`, `offset` |
 | `GET /videos/<id or slug>` | yes | One video with stream/download/thumbnail URLs |
 | `PATCH /videos/<id or slug>` | yes | JSON: `title`, `description`, `category` or `category_id` |
 | `DELETE /videos/<id or slug>` | yes | Delete a video and its files |
 | `GET /categories` | yes | Categories with counts |
-| `POST /categories` | yes | JSON: `{"name": "..."}` |
+| `POST /categories` | yes | JSON: `{"name": "...", "section": "algorithms" \| "ai" \| "science"}` |
 
 The token can also be sent as `X-API-Key: <token>`.
 If ffmpeg is installed (it's included in the Docker image), uploads get a thumbnail and duration

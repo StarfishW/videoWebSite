@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% macro pname(p) %}{% if p.no is not none %}{{ p.no }}. {% endif %}{{ p.name }}{% endmacro %}
+{% block title %}{% if current %}{{ pname(current.problem) }} · {% endif %}{{ _('Algorithms') }} · {{ site_name }}{% endblock %}
+{% block main_class %}wide-main{% endblock %}
+{% block content %}
+{% if not current %}
+  <div class="empty">
+    <div class="lock" aria-hidden="true">{{ section_icons['algorithms']|safe }}</div>
+    <h1>{{ _('No algorithm videos yet') }}</h1>
+    <p>{{ _('Put a category in the Algorithms section (Manage → Categories) and its videos will show up here.') }}</p>
+    <a class="btn primary" href="{{ url_for('categories') }}">{{ _('Categories') }}</a>
+  </div>
+{% else %}
+{% set cur = current.video %}
+<div class="algo">
+  <aside class="algo-side" id="algo-side">
+    <div class="algo-side-head">
+      <h1><span aria-hidden="true">{{ section_icons['algorithms']|safe }}</span> {{ _('Algorithms') }}</h1>
+      <span class="hint">{{ _('{n} problems', n=data|length) }} · {{ _('{n} videos', n=count) }}</span>
+    </div>
+    <input type="search" id="algo-filter" class="algo-filter" placeholder="{{ _('Filter problems…') }}"
+           aria-label="{{ _('Filter problems…') }}" autocomplete="off">
+    <nav class="algo-list" aria-label="{{ _('Problems') }}">
+      {% for grp in groups %}
+        <section class="algo-group">
+          <h2>{{ grp.series }} <small>{{ grp.problems|length }}</small></h2>
+          <ul>
+            {% for p in grp.problems %}
+              <li data-search="{{ (p.no ~ ' ' if p.no is not none else '') ~ p.name|lower }}">
+                <a class="algo-item {{ 'active' if p.key == current.problem.key }}" href="{{ url_for('algorithms', v=p.cards[0].slug) }}"
+                   data-key="{{ p.key }}" {% if p.key == current.problem.key %}aria-current="true"{% endif %}>
+                  <span class="no">{{ p.no if p.no is not none else '•' }}</span>
+                  <span class="name">{{ p.name }}</span>
+                  {% if p.cards|length > 1 %}<span class="cnt" title="{{ _('{n} videos', n=p.cards|length) }}">{{ p.cards|length }}</span>{% endif %}
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endfor %}
+      <p class="hint algo-none" id="algo-none" hidden>{{ _('No problems match.') }}</p>
+    </nav>
+  </aside>
+
+  <section class="algo-main" id="algo-main" aria-live="polite">
+    <div class="algo-head">
+      <button type="button" class="btn ghost algo-toggle" id="algo-toggle" aria-controls="algo-side">&#9776; {{ _('Problems') }}</button>
+      <div>
+        <div class="crumb" id="algo-crumb">{{ current.problem.series }}</div>
+        <h1 id="algo-title">{{ pname(current.problem) }}</h1>
+      </div>
+    </div>
+
+    <video id="algo-player" class="player" controls preload="metadata" playsinline
+           {% if cur.thumb %}poster="{{ cur.thumb }}"{% endif %} src="{{ cur.media }}"></video>
+
+    <div class="vtabs" id="algo-tabs" role="tablist" aria-label="{{ _('Versions') }}"
+         {% if current.problem.cards|length < 2 %}hidden{% endif %}>
+      {% for c in current.problem.cards %}
+        <a class="vtab {{ 'active' if c.slug == cur.slug }}" role="tab" href="{{ url_for('algorithms', v=c.slug) }}"
+           data-slug="{{ c.slug }}" aria-selected="{{ 'true' if c.slug == cur.slug else 'false' }}">{{ c.label }}</a>
+      {% endfor %}
+    </div>
+
+    <div class="algo-info">
+      <div>
+        <h2 id="algo-vtitle">{{ cur.title }}</h2>
+        <div class="meta" id="algo-meta">
+          {% if cur.category %}<span class="tag s-algorithms">{{ cur.category }}</span>{% endif %}
+          <span>{{ _('Uploaded {date}', date=cur.date) }}</span>
+          {% if cur.duration %}<span>{{ cur.duration }}</span>{% endif %}
+          <span>{{ cur.size }}</span>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" id="algo-open" href="{{ cur.page }}">&#10150; {{ _('Share') }}</a>
+        <a class="btn" id="algo-download" href="{{ cur.download }}">&#8681; {{ _('Download') }}</a>
+        <a class="btn ghost" id="algo-edit" href="{{ cur.edit }}">{{ _('Edit') }}</a>
+      </div>
+    </div>
+    <div class="description" id="algo-desc" {% if not cur.description %}hidden{% endif %}>{{ cur.description }}</div>
+  </section>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if current %}
+<script>
+(function () {
+  var DATA = {{ data|tojson }};
+  var T = { uploaded: {{ _('Uploaded {date}', date='{date}')|tojson }} };
+  var byKey = {}, bySlug = {};
+  DATA.forEach(function (p) {
+    byKey[p.key] = p;
+    p.videos.forEach(function (v) { bySlug[v.slug] = { p: p, v: v }; });
+  });
+
+  var $ = function (id) { return document.getElementById(id); };
+  var player = $('algo-player'), side = $('algo-side');
+  var current = {{ current.video.slug|tojson }};
+
+  function pname(p) { return (p.no !== null && p.no !== undefined ? p.no + '. ' : '') + p.name; }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; }
+
+  function show(slug, push) {
+    var hit = bySlug[slug];
+    if (!hit) return;
+    var p = hit.p, v = hit.v, sameProblem = bySlug[current] && bySlug[current].p === p;
+    current = slug;
+
+    $('algo-crumb').textContent = p.series;
+    $('algo-title').textContent = pname(p);
+    document.title = pname(p) + ' · ' + document.title.split(' · ').slice(-2).join(' · ');
+
+    if (player.getAttribute('src') !== v.media) {
+      player.pause();
+      if (v.thumb) player.setAttribute('poster', v.thumb); else player.removeAttribute('poster');
+      player.setAttribute('src', v.media);
+      player.load();
+    }
+
+    // version tabs
+    var tabs = $('algo-tabs');
+    tabs.innerHTML = '';
+    p.videos.forEach(function (x) {
+      var a = el('a', 'vtab' + (x.slug === slug ? ' active' : ''), x.label);
+      a.href = '?v=' + encodeURIComponent(x.slug);
+      a.dataset.slug = x.slug;
+      a.setAttribute('role', 'tab');
+      a.setAttribute('aria-selected', x.slug === slug ? 'true' : 'false');
+      tabs.appendChild(a);
+    });
+    tabs.hidden = p.videos.length < 2;
+
+    // details
+    $('algo-vtitle').textContent = v.title;
+    var meta = $('algo-meta');
+    meta.innerHTML = '';
+    if (v.category) meta.appendChild(el('span', 'tag s-algorithms', v.category));
+    meta.appendChild(el('span', null, T.uploaded.replace('{date}', v.date)));
+    if (v.duration) meta.appendChild(el('span', null, v.duration));
+    meta.appendChild(el('span', null, v.size));
+    $('algo-open').href = v.page;
+    $('algo-download').href = v.download;
+    $('algo-edit').href = v.edit;
+    var desc = $('algo-desc');
+    desc.textContent = v.description || '';
+    desc.hidden = !v.description;
+
+    // problem list
+    document.querySelectorAll('.algo-item').forEach(function (a) {
+      var on = a.dataset.key === p.key;
+      a.classList.toggle('active', on);
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+
+    if (push) history.pushState({ slug: slug }, '', '?v=' + encodeURIComponent(slug));
+    if (!sameProblem) {
+      side.classList.remove('open');
+      if (window.innerWidth < 900) $('algo-main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  document.querySelector('.algo-list').addEventListener('click', function (e) {
+    var a = e.target.closest('.algo-item');
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    show(byKey[a.dataset.key].videos[0].slug, true);
+  });
+  $('algo-tabs').addEventListener('click', function (e) {
+    var a = e.target.closest('.vtab');
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    var wasPlaying = !player.paused;
+    show(a.dataset.slug, true);
+    if (wasPlaying) player.play().catch(function () {});
+  });
+  window.addEventListener('popstate', function (e) {
+    var slug = (e.state && e.state.slug) || new URLSearchParams(location.search).get('v') || DATA[0].videos[0].slug;
+    show(slug, false);
+  });
+  history.replaceState({ slug: current }, '', location.href);
+
+  // filter the problem list
+  $('algo-filter').addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase(), any = false;
+    document.querySelectorAll('.algo-group').forEach(function (g) {
+      var shown = 0;
+      g.querySelectorAll('li').forEach(function (li) {
+        var ok = !q || li.dataset.search.indexOf(q) !== -1;
+        li.hidden = !ok;
+        if (ok) shown++;
+      });
+      g.hidden = shown === 0;
+      if (shown) any = true;
+    });
+    $('algo-none').hidden = any;
+  });
+
+  // phones: the problem list slides in from a button
+  $('algo-toggle').addEventListener('click', function () { side.classList.toggle('open'); });
+
+  // keep the active problem visible in the list
+  var act = document.querySelector('.algo-item.active');
+  if (act && act.scrollIntoView) act.scrollIntoView({ block: 'nearest' });
+})();
+</script>
+{% endif %}
+{% endblock %}

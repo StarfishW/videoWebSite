@@ -11,6 +11,7 @@ import hmac
 import io
 import mimetypes
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -49,8 +50,9 @@ IMAGE_EXT = {"jpg", "jpeg", "png", "webp", "gif"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS categories (
-    id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE COLLATE NOCASE
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    name    TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    section TEXT NOT NULL DEFAULT 'science'
 );
 CREATE TABLE IF NOT EXISTS videos (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +67,10 @@ CREATE TABLE IF NOT EXISTS videos (
     thumb         TEXT,
     created_at    TEXT NOT NULL,
     md5           TEXT,
-    slug          TEXT
+    slug          TEXT,
+    series        TEXT,
+    problem_no    INTEGER,
+    problem       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_videos_category ON videos(category_id);
 CREATE TABLE IF NOT EXISTS settings (
@@ -149,20 +154,88 @@ def unique_slug(db, md5, exclude_id=None):
     return f"{md5[:SLUG_LEN]}-{i}"
 
 
+# The site is split into three sections; every category belongs to one of them.
+SECTIONS = ("algorithms", "ai", "science")
+DEFAULT_SECTION = "science"   # uncategorized videos show up here too
+SECTION_LABELS = {"algorithms": "Algorithms", "ai": "AI Tutorials", "science": "Popular Science"}
+SECTION_ICONS = {"algorithms": "&#129513;", "ai": "&#129302;", "science": "&#128301;"}
+
+
+def guess_section(category_name):
+    """Default section for a new category, from its name."""
+    n = (category_name or "").lower()
+    if any(k in n for k in ("leetcode", "algorithm", "算法", "数据结构", "刷题")):
+        return "algorithms"
+    return DEFAULT_SECTION
+
+
+# "LeetCode 第42题：接雨水。…"  /  "算法思维 · 倒着学 第1课：滑动窗口。…"
+_LC_RE = re.compile(r"(LeetCode)\s*第\s*(\d+)\s*题\s*[：:]\s*([^。\n]+)", re.I)
+_LESSON_RE = re.compile(r"^\s*(.+?)\s*第\s*(\d+)\s*课\s*[：:]\s*([^。\n]+)")
+
+
+def parse_problem(title, description):
+    """(series, number, name) of the algorithm problem a video is about, or (None, None, None)."""
+    for rx in (_LC_RE, _LESSON_RE):
+        m = rx.search(description or "")
+        if m:
+            series = "LeetCode" if rx is _LC_RE else m.group(1).strip()
+            return series, int(m.group(2)), m.group(3).strip()
+    return None, None, None
+
+
+def detect_problem(db, title, description, category_id):
+    """Like parse_problem, but for algorithm videos without the usual description it matches
+    the title prefix ("两数之和 · 午夜数学") against problems already in the library."""
+    series, no, name = parse_problem(title, description)
+    if series or category_id is None:
+        return series, no, name
+    row = db.execute("SELECT name, section FROM categories WHERE id = ?", (category_id,)).fetchone()
+    if not row or row[1] != "algorithms":
+        return None, None, None
+    head = (title or "").split(" · ")[0].strip()
+    head = re.sub(r"^第\s*\d+\s*[集课]\s*[：:]\s*", "", head)
+    known = db.execute("SELECT series, problem_no, problem FROM videos WHERE problem IS NOT NULL "
+                       "AND (problem = ? OR ? LIKE '%' || problem || '%') "
+                       "ORDER BY (problem = ?) DESC, LENGTH(problem) DESC LIMIT 1",
+                       (head, title, head)).fetchone()
+    if known:
+        return known[0], known[1], known[2]
+    return row[0], None, head or title
+
+
 def init_db():
     with sqlite3.connect(DB_PATH) as db:
         db.executescript(SCHEMA)
-        # Upgrade older databases: add md5/slug and fill them in for existing videos.
+        # Upgrade older databases: add new columns and fill them in for existing rows.
         cols = {r[1] for r in db.execute("PRAGMA table_info(videos)")}
-        for col in ("md5", "slug"):
+        for col, kind in (("md5", "TEXT"), ("slug", "TEXT"), ("series", "TEXT"),
+                          ("problem_no", "INTEGER"), ("problem", "TEXT")):
             if col not in cols:
-                db.execute(f"ALTER TABLE videos ADD COLUMN {col} TEXT")
+                db.execute(f"ALTER TABLE videos ADD COLUMN {col} {kind}")
+        if "section" not in {r[1] for r in db.execute("PRAGMA table_info(categories)")}:
+            db.execute(f"ALTER TABLE categories ADD COLUMN section TEXT NOT NULL DEFAULT '{DEFAULT_SECTION}'")
+            for cid, name in db.execute("SELECT id, name FROM categories").fetchall():
+                db.execute("UPDATE categories SET section = ? WHERE id = ?", (guess_section(name), cid))
         db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_slug ON videos(slug)")
         for vid, filename in db.execute(
                 "SELECT id, filename FROM videos WHERE slug IS NULL OR slug = '' ORDER BY id").fetchall():
             path = os.path.join(VIDEO_DIR, filename)
             md5 = file_md5(path) if os.path.exists(path) else hashlib.md5(f"missing-{vid}".encode()).hexdigest()
             db.execute("UPDATE videos SET md5 = ?, slug = ? WHERE id = ?", (md5, unique_slug(db, md5, vid), vid))
+        # One-time: work out which algorithm problem each existing video belongs to.
+        if not db.execute("SELECT 1 FROM settings WHERE key = 'problems_backfilled'").fetchone():
+            rows = db.execute("SELECT id, title, description, category_id FROM videos ORDER BY id").fetchall()
+            for vid, title, desc, cid in rows:          # pass 1: videos that name their problem
+                s, n, p = parse_problem(title, desc)
+                if s:
+                    db.execute("UPDATE videos SET series=?, problem_no=?, problem=? WHERE id=?", (s, n, p, vid))
+            for vid, title, desc, cid in rows:          # pass 2: match the rest by title
+                if not parse_problem(title, desc)[0]:
+                    s, n, p = detect_problem(db, title, desc, cid)
+                    if p:
+                        db.execute("UPDATE videos SET series=?, problem_no=?, problem=? WHERE id=?", (s, n, p, vid))
+            db.execute("INSERT INTO settings (key, value) VALUES ('problems_backfilled', '1')")
         db.commit()
 
 
@@ -188,7 +261,7 @@ def set_settings(**values):
 
 def find_video(vid):
     return get_db().execute(
-        "SELECT v.*, c.name AS category_name FROM videos v "
+        "SELECT v.*, c.name AS category_name, " + SECTION_OF + " AS section FROM videos v "
         "LEFT JOIN categories c ON c.id = v.category_id WHERE v.id = ?", (vid,)
     ).fetchone()
 
@@ -200,18 +273,34 @@ def get_video(vid):
     return row
 
 
-def all_categories():
-    return get_db().execute(
-        "SELECT c.id, c.name, COUNT(v.id) AS n FROM categories c "
-        "LEFT JOIN videos v ON v.category_id = c.id "
-        "GROUP BY c.id ORDER BY c.name COLLATE NOCASE"
-    ).fetchall()
+def all_categories(section=None):
+    sql = ("SELECT c.id, c.name, c.section, COUNT(v.id) AS n FROM categories c "
+           "LEFT JOIN videos v ON v.category_id = c.id ")
+    params = []
+    if section:
+        sql += "WHERE c.section = ? "
+        params.append(section)
+    return get_db().execute(sql + "GROUP BY c.id ORDER BY c.name COLLATE NOCASE", params).fetchall()
 
 
-def query_videos(cat="", q="", sort="new", limit=None, offset=0):
-    sql = ("SELECT v.*, c.name AS category_name FROM videos v "
+SECTION_OF = f"COALESCE(c.section, '{DEFAULT_SECTION}')"   # uncategorized -> default section
+
+
+def section_counts():
+    rows = get_db().execute(f"SELECT {SECTION_OF} AS s, COUNT(*) AS n FROM videos v "
+                            "LEFT JOIN categories c ON c.id = v.category_id GROUP BY s").fetchall()
+    counts = {s: 0 for s in SECTIONS}
+    counts.update({r["s"]: r["n"] for r in rows if r["s"] in counts})
+    return counts
+
+
+def query_videos(cat="", q="", sort="new", limit=None, offset=0, section=None):
+    sql = ("SELECT v.*, c.name AS category_name, " + SECTION_OF + " AS section FROM videos v "
            "LEFT JOIN categories c ON c.id = v.category_id WHERE 1 = 1")
     params = []
+    if section:
+        sql += f" AND {SECTION_OF} = ?"
+        params.append(section)
     if cat == "none":
         sql += " AND v.category_id IS NULL"
     elif str(cat).isdigit():
@@ -363,7 +452,19 @@ def _template_globals():
         "is_admin": is_admin(), "csrf_token": csrf_token, "site_name": SITE_NAME,
         "_": _, "lang": lang, "languages": LANGUAGES,
         "js_strings": {s: translate(s, lang) for s in JS_STRINGS},
+        "sections": SECTIONS, "section_labels": SECTION_LABELS, "section_icons": SECTION_ICONS,
+        "section_url": section_url, "active_section": _active_section(),
     }
+
+
+def _active_section():
+    """Which top-nav tab to highlight."""
+    ep = request.endpoint or ""
+    if ep == "algorithms":
+        return "algorithms"
+    if ep == "section_page":
+        return (request.view_args or {}).get("section")
+    return None
 
 
 # ---------------------------------------------------------------- template filters
@@ -481,7 +582,7 @@ def generate_thumbnail(path, duration):
     return None
 
 
-def category_by_name(name, create=True):
+def category_by_name(name, create=True, section=None):
     name = " ".join((name or "").split())[:80]
     if not name:
         return None
@@ -491,7 +592,8 @@ def category_by_name(name, create=True):
         return row["id"]
     if not create:
         return None
-    cur = db.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+    section = section if section in SECTIONS else guess_section(name)
+    cur = db.execute("INSERT INTO categories (name, section) VALUES (?, ?)", (name, section))
     db.commit()
     return cur.lastrowid
 
@@ -507,8 +609,22 @@ def resolve_category(form):
     """Web form: an existing category id, '__new__' + new_category, or none."""
     choice = form.get("category", "")
     if choice == "__new__":
-        return category_by_name(form.get("new_category", ""))
+        return category_by_name(form.get("new_category", ""), section=form.get("new_section"))
     return category_by_id(choice)
+
+
+def problem_fields(form, title, description, category_id, current=None):
+    """Series / number / problem name from a form or JSON body. Fields that aren't sent keep
+    their current value (or are detected automatically for a new upload)."""
+    if not any(k in form for k in ("series", "problem_no", "problem")):
+        if current is not None:
+            return current["series"], current["problem_no"], current["problem"]
+        return detect_problem(get_db(), title, description, category_id)
+    series = " ".join(str(form.get("series") or "").split())[:80] or None
+    name = " ".join(str(form.get("problem") or "").split())[:120] or None
+    raw_no = str(form.get("problem_no") or "").strip()
+    no = int(raw_no) if raw_no.isdigit() else None
+    return series, no, name
 
 
 def parse_duration(value):
@@ -531,8 +647,10 @@ class UploadError(ValueError):
     pass
 
 
-def store_video(file, title, description, category_id, thumbnail_file=None, duration=None):
-    """Save an uploaded video + metadata. Returns the new video id."""
+def store_video(file, title, description, category_id, thumbnail_file=None, duration=None,
+                problem=None):
+    """Save an uploaded video + metadata. Returns the new video id.
+    `problem` is (series, number, name); None = detect it from the title/description."""
     if not file or not file.filename:
         raise UploadError(_("Please choose a video file."))
     ext = ext_of(file.filename)
@@ -554,12 +672,15 @@ def store_video(file, title, description, category_id, thumbnail_file=None, dura
     thumb = save_thumbnail(thumbnail_file) or generate_thumbnail(path, duration)
     mime = file.mimetype if (file.mimetype or "").startswith("video/") else mimetypes.guess_type(original)[0]
     db = get_db()
+    description = (description or "").strip()
+    series, problem_no, problem_name = problem or detect_problem(db, title, description, category_id)
     cur = db.execute(
         "INSERT INTO videos (title, description, category_id, filename, original_name, mime, "
-        "size, duration, thumb, created_at, md5, slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (title[:200], (description or "").strip(), category_id, stored, original, mime,
+        "size, duration, thumb, created_at, md5, slug, series, problem_no, problem) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (title[:200], description, category_id, stored, original, mime,
          os.path.getsize(path), duration, thumb, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-         md5, unique_slug(db, md5)),
+         md5, unique_slug(db, md5), series, problem_no, problem_name),
     )
     db.commit()
     return cur.lastrowid, title
@@ -582,29 +703,123 @@ def index():
         return render_template("private.html")
     q = request.args.get("q", "").strip()
     cat = request.args.get("category", "")
+    if cat:  # old ?category= links: open that category inside its section
+        row = get_db().execute("SELECT section FROM categories WHERE id = ?",
+                               (int(cat),)).fetchone() if cat.isdigit() else None
+        section = row["section"] if row else DEFAULT_SECTION
+        return redirect(section_url(section, category=cat, q=q or None))
+    if q:  # search across every section
+        return render_template("grid.html", section=None, q=q, cat="", sort=request.args.get("sort", "new"),
+                               videos=query_videos("", q, request.args.get("sort", "new")),
+                               categories=[], total=0, uncategorized=0, active_name=None)
+    counts = section_counts()
+    recent = {s: query_videos(section=s, limit=4) for s in SECTIONS}
+    return render_template("home.html", counts=counts, recent=recent,
+                           latest=query_videos(limit=8), total=sum(counts.values()))
+
+
+def section_url(section, **args):
+    if section == "algorithms":
+        return url_for("algorithms", **{k: v for k, v in args.items() if k == "v"})
+    return url_for("section_page", section=section, **args)
+
+
+@app.route("/<any(ai, science):section>")
+@admin_required
+def section_page(section):
+    """AI Tutorials / Popular Science: a grid of videos, filterable by category."""
+    q = request.args.get("q", "").strip()
+    cat = request.args.get("category", "")
     sort = request.args.get("sort", "new")
-    db = get_db()
-    totals = db.execute(
-        "SELECT COUNT(*) AS total, SUM(category_id IS NULL) AS uncategorized FROM videos"
-    ).fetchone()
+    cats = all_categories(section)
+    uncategorized = 0
+    if section == DEFAULT_SECTION:
+        uncategorized = get_db().execute("SELECT COUNT(*) FROM videos WHERE category_id IS NULL").fetchone()[0]
     active_name = None
     if cat.isdigit():
-        row = db.execute("SELECT name FROM categories WHERE id = ?", (int(cat),)).fetchone()
-        active_name = row["name"] if row else None
+        active_name = next((c["name"] for c in cats if str(c["id"]) == cat), None)
     elif cat == "none":
         active_name = _("Uncategorized")
     return render_template(
-        "index.html", videos=query_videos(cat, q, sort), categories=all_categories(),
-        q=q, cat=cat, sort=sort, total=totals["total"] or 0,
-        uncategorized=totals["uncategorized"] or 0, active_name=active_name,
-    )
+        "grid.html", section=section, videos=query_videos(cat, q, sort, section=section),
+        categories=cats, q=q, cat=cat, sort=sort, total=section_counts()[section],
+        uncategorized=uncategorized, active_name=active_name)
+
+
+def variant_label(title, problem):
+    """Tab label inside a problem: '两数之和 · 午夜数学' -> '午夜数学'."""
+    if " · " in title:
+        return title.rsplit(" · ", 1)[1]
+    if problem and problem in title:
+        m = re.match(r"^\s*(第\s*\d+\s*[集课])", title)
+        if m:
+            return m.group(1).replace(" ", "")
+    return title
+
+
+def algorithm_groups():
+    """Algorithm videos grouped into problems, grouped into series (LeetCode first)."""
+    rows = query_videos(section="algorithms", sort="title")
+    problems = {}
+    for v in rows:
+        name = v["problem"] or v["title"]
+        series = v["series"] or v["category_name"] or _("Other")
+        key = (series, v["problem_no"] if v["problem_no"] is not None else name)
+        p = problems.setdefault(key, {"series": series, "no": v["problem_no"], "name": name, "videos": []})
+        p["videos"].append(v)
+    for p in problems.values():
+        # style versions in file order (a_, b_, c_, d_); full episodes ("第1集…") last
+        p["videos"].sort(key=lambda v: (v["original_name"].startswith("第"), v["original_name"].lower()))
+    series_names = sorted({p["series"] for p in problems.values()},
+                          key=lambda s: (s.lower() != "leetcode", s.lower()))
+    groups = []
+    for s in series_names:
+        items = sorted((p for p in problems.values() if p["series"] == s),
+                       key=lambda p: (p["no"] is None, p["no"] or 0, p["name"]))
+        groups.append({"series": s, "problems": items})
+    return groups
+
+
+def video_card(v):
+    """The data the algorithm page's player needs for one video."""
+    return {
+        "slug": v["slug"], "title": v["title"], "label": variant_label(v["title"], v["problem"]),
+        "description": v["description"], "category": v["category_name"],
+        "date": _date(v["created_at"]), "duration": _duration(v["duration"]), "size": _filesize(v["size"]),
+        "file": v["original_name"],
+        "media": url_for("media", slug=v["slug"]), "mime": v["mime"] or "video/mp4",
+        "thumb": url_for("thumb", slug=v["slug"]) if v["thumb"] else None,
+        "page": url_for("video", slug=v["slug"]), "download": url_for("download", slug=v["slug"]),
+        "edit": url_for("edit", vid=v["id"]),
+    }
+
+
+@app.route("/algorithms")
+@admin_required
+def algorithms():
+    """Problem list on the left; the chosen problem's video (and its style versions) on the right."""
+    groups = algorithm_groups()
+    data, problems = [], []
+    for gi, grp in enumerate(groups):
+        for pi, p in enumerate(grp["problems"]):
+            p["key"] = f"{gi}-{pi}"
+            p["cards"] = [video_card(v) for v in p["videos"]]
+            problems.append(p)
+            data.append({"key": p["key"], "series": grp["series"], "no": p["no"], "name": p["name"],
+                         "videos": p["cards"]})
+    # ?v=<slug> picks the video (and so its problem); default = first problem, first version
+    want = request.args.get("v", "")
+    current = next(({"problem": p, "video": c} for p in problems for c in p["cards"] if c["slug"] == want),
+                   {"problem": problems[0], "video": problems[0]["cards"][0]} if problems else None)
+    return render_template("algorithms.html", groups=groups, data=data, current=current,
+                           count=section_counts()["algorithms"])
 
 
 def find_by_ref(ref):
     """Find a video by short link (MD5 prefix). Numeric ids work only for the admin,
     so visitors can't step through /video/1, /video/2, ... to find unshared videos."""
     db = get_db()
-    sql = ("SELECT v.*, c.name AS category_name FROM videos v "
+    sql = ("SELECT v.*, c.name AS category_name, " + SECTION_OF + " AS section FROM videos v "
            "LEFT JOIN categories c ON c.id = v.category_id WHERE ")
     row = db.execute(sql + "v.slug = ?", (ref,)).fetchone()
     if row is None and ref.isdigit() and len(ref) < SLUG_LEN and is_admin():
@@ -774,12 +989,16 @@ def edit(vid):
         remove_file(THUMB_DIR, thumb_name)
         thumb_name = new_thumb
     duration = parse_duration(request.form.get("duration")) or v["duration"]
+    description = request.form.get("description", "").strip()
+    category_id = resolve_category(request.form)
+    series, problem_no, problem_name = problem_fields(request.form, title, description, category_id, v)
 
     db = get_db()
     db.execute(
-        "UPDATE videos SET title = ?, description = ?, category_id = ?, thumb = ?, duration = ? WHERE id = ?",
-        (title[:200], request.form.get("description", "").strip(),
-         resolve_category(request.form), thumb_name, duration, vid),
+        "UPDATE videos SET title = ?, description = ?, category_id = ?, thumb = ?, duration = ?, "
+        "series = ?, problem_no = ?, problem = ? WHERE id = ?",
+        (title[:200], description, category_id, thumb_name, duration,
+         series, problem_no, problem_name, vid),
     )
     db.commit()
     flash(_("Changes saved."), "ok")
@@ -806,11 +1025,13 @@ def _clean_name():
 def categories():
     if request.method == "POST":
         name = _clean_name()
+        section = request.form.get("section")
         if not name:
             flash(_("Category name can't be empty."), "error")
         else:
             try:
-                get_db().execute("INSERT INTO categories (name) VALUES (?)", (name,))
+                get_db().execute("INSERT INTO categories (name, section) VALUES (?, ?)",
+                                 (name, section if section in SECTIONS else guess_section(name)))
                 get_db().commit()
                 flash(_("Added category “{name}”.", name=name), "ok")
             except sqlite3.IntegrityError:
@@ -822,14 +1043,19 @@ def categories():
 @app.route("/categories/<int:cid>/rename", methods=["POST"])
 @admin_required
 def rename_category(cid):
+    """Save a category's name and section."""
     name = _clean_name()
+    section = request.form.get("section")
     if not name:
         flash(_("Category name can't be empty."), "error")
     else:
         try:
-            get_db().execute("UPDATE categories SET name = ? WHERE id = ?", (name, cid))
-            get_db().commit()
-            flash(_("Category renamed."), "ok")
+            db = get_db()
+            db.execute("UPDATE categories SET name = ? WHERE id = ?", (name, cid))
+            if section in SECTIONS:
+                db.execute("UPDATE categories SET section = ? WHERE id = ?", (section, cid))
+            db.commit()
+            flash(_("Category saved."), "ok")
         except sqlite3.IntegrityError:
             flash(_("A category named “{name}” already exists.", name=name), "error")
     return redirect(url_for("categories"))
@@ -914,6 +1140,9 @@ def video_json(v):
         "description": v["description"],
         "category": ({"id": v["category_id"], "name": v["category_name"]}
                      if v["category_id"] is not None else None),
+        "section": v["section"] if "section" in v.keys() else None,
+        "problem": ({"series": v["series"], "number": v["problem_no"], "name": v["problem"]}
+                    if v["problem"] else None),
         "original_name": v["original_name"],
         "size": v["size"],
         "duration": v["duration"],
@@ -932,7 +1161,8 @@ def video_json(v):
 @api_enabled
 @token_required
 def api_categories():
-    return jsonify([{"id": c["id"], "name": c["name"], "count": c["n"]} for c in all_categories()])
+    return jsonify([{"id": c["id"], "name": c["name"], "section": c["section"], "count": c["n"]}
+                    for c in all_categories()])
 
 
 @app.post("/api/<key>/categories")
@@ -943,10 +1173,16 @@ def api_create_category():
     name = " ".join(str(data.get("name", "")).split())[:80]
     if not name:
         return api_error("Field 'name' is required.")
+    section = data.get("section")
+    if section and section not in SECTIONS:
+        return api_error(f"section must be one of: {', '.join(SECTIONS)}.")
     existed = category_by_name(name, create=False)
-    cid = existed or category_by_name(name)
-    row = get_db().execute("SELECT name FROM categories WHERE id = ?", (cid,)).fetchone()
-    return jsonify(id=cid, name=row["name"]), (200 if existed else 201)
+    cid = existed or category_by_name(name, section=section)
+    if existed and section:
+        get_db().execute("UPDATE categories SET section = ? WHERE id = ?", (section, cid))
+        get_db().commit()
+    row = get_db().execute("SELECT name, section FROM categories WHERE id = ?", (cid,)).fetchone()
+    return jsonify(id=cid, name=row["name"], section=row["section"]), (200 if existed else 201)
 
 
 @app.get("/api/<key>/videos")
@@ -965,7 +1201,7 @@ def api_list_videos():
 
 def api_find(ref):
     """API accepts either the numeric id or the short link (slug)."""
-    row = get_db().execute("SELECT v.*, c.name AS category_name FROM videos v "
+    row = get_db().execute("SELECT v.*, c.name AS category_name, " + SECTION_OF + " AS section FROM videos v "
                            "LEFT JOIN categories c ON c.id = v.category_id WHERE v.slug = ?", (ref,)).fetchone()
     return row or (find_video(int(ref)) if ref.isdigit() else None)
 
@@ -993,9 +1229,12 @@ def api_upload_video():
         category_id = category_by_name(form.get("category", ""))
     file = request.files.get("file") or request.files.get("video")
     g.lang = "en"  # API messages are always English
+    problem = None
+    if any(k in form for k in ("series", "problem_no", "problem")):
+        problem = problem_fields(form, form.get("title"), form.get("description"), category_id)
     try:
         vid, _title = store_video(file, form.get("title"), form.get("description"), category_id,
-                                  request.files.get("thumbnail"), form.get("duration"))
+                                  request.files.get("thumbnail"), form.get("duration"), problem)
     except UploadError as e:
         return api_error(str(e))
     resp = jsonify(video_json(find_video(vid)))
@@ -1023,9 +1262,12 @@ def api_update_video(ref):
             return api_error("category_id does not exist.")
     elif "category" in data:
         category_id = category_by_name(data["category"]) if data["category"] else None
+    description = str(data.get("description", v["description"]))
+    series, problem_no, problem_name = problem_fields(data, title, description, category_id, v)
     db = get_db()
-    db.execute("UPDATE videos SET title = ?, description = ?, category_id = ? WHERE id = ?",
-               (title[:200], str(data.get("description", v["description"])), category_id, vid))
+    db.execute("UPDATE videos SET title = ?, description = ?, category_id = ?, "
+               "series = ?, problem_no = ?, problem = ? WHERE id = ?",
+               (title[:200], description, category_id, series, problem_no, problem_name, vid))
     db.commit()
     return jsonify(video_json(find_video(vid)))
 

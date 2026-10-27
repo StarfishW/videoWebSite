@@ -1,35 +1,49 @@
 {% extends "base.html" %}
+{% macro section_select(selected, name='section') %}
+  <select name="{{ name }}" aria-label="{{ _('Section') }}" class="section-select">
+    {% for s in sections %}
+      <option value="{{ s }}" {{ 'selected' if s == selected }}>{{ _(section_labels[s]) }}</option>
+    {% endfor %}
+  </select>
+{% endmacro %}
 {% block title %}{{ _('Categories') }} · {{ site_name }}{% endblock %}
 {% block content %}
 <div class="panel">
   <h1>{{ _('Categories') }}</h1>
-  <form method="post" action="{{ url_for('categories') }}" class="row">
+  <p class="hint">{{ _('Each category belongs to one section. Algorithms videos appear in the problem list; the other two sections show a grid.') }}</p>
+  <form method="post" action="{{ url_for('categories') }}" class="row wrap">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
     <input name="name" maxlength="80" placeholder="{{ _('New category name') }}" required>
+    {{ section_select('science') }}
     <button class="btn primary" type="submit">{{ _('Add') }}</button>
   </form>
 
-  {% if categories %}
-    <ul class="cat-list">
-      {% for c in categories %}
-        <li>
-          <form method="post" action="{{ url_for('rename_category', cid=c.id) }}" class="row grow">
-            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-            <input name="name" value="{{ c.name }}" maxlength="80" required aria-label="{{ _('Category') }}">
-            <button class="btn" type="submit">{{ _('Rename') }}</button>
-          </form>
-          <a class="count" href="{{ url_for('index', category=c.id) }}">{{ _('1 video') if c.n == 1 else _('{n} videos', n=c.n) }}</a>
-          <form method="post" action="{{ url_for('delete_category', cid=c.id) }}" class="inline"
-                data-confirm="{{ _('Delete category “{name}”? Its videos will become uncategorized.', name=c.name) }}">
-            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-            <button class="btn danger" type="submit">{{ _('Delete') }}</button>
-          </form>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="hint">{{ _('No categories yet. Add one above, or create one while uploading.') }}</p>
-  {% endif %}
+  {% for s in sections %}
+    {% set cats = categories|selectattr('section', 'equalto', s)|list %}
+    <h2 class="cat-section s-{{ s }}"><span aria-hidden="true">{{ section_icons[s]|safe }}</span> {{ _(section_labels[s]) }}</h2>
+    {% if cats %}
+      <ul class="cat-list">
+        {% for c in cats %}
+          <li>
+            <form method="post" action="{{ url_for('rename_category', cid=c.id) }}" class="row grow wrap">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <input name="name" value="{{ c.name }}" maxlength="80" required aria-label="{{ _('Category') }}">
+              {{ section_select(c.section) }}
+              <button class="btn" type="submit">{{ _('Save') }}</button>
+            </form>
+            <a class="count" href="{{ section_url(c.section, category=c.id) }}">{{ _('1 video') if c.n == 1 else _('{n} videos', n=c.n) }}</a>
+            <form method="post" action="{{ url_for('delete_category', cid=c.id) }}" class="inline"
+                  data-confirm="{{ _('Delete category “{name}”? Its videos will become uncategorized.', name=c.name) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <button class="btn danger" type="submit">{{ _('Delete') }}</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="hint cat-empty">{{ _('No categories in this section yet.') }}</p>
+    {% endif %}
+  {% endfor %}
 </div>
 {% endblock %}
 {% block scripts %}

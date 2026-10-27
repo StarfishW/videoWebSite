@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>{{ site_name }}</h1>
+  <p class="hint">{{ _('{n} videos in three sections', n=total) }}</p>
+</section>
+
+<div class="section-cards">
+  {% set blurbs = {'algorithms': _('Problems explained step by step, in several styles each.'),
+                   'ai': _('Hands-on AI tutorials.'),
+                   'science': _('Friendly explainers for everyone.')} %}
+  {% for s in sections %}
+    <a class="section-card s-{{ s }}" href="{{ section_url(s) }}">
+      <div class="sc-head">
+        <span class="sc-ico" aria-hidden="true">{{ section_icons[s]|safe }}</span>
+        <div>
+          <h2>{{ _(section_labels[s]) }}</h2>
+          <span class="sc-count">{{ _('1 video') if counts[s] == 1 else _('{n} videos', n=counts[s]) }}</span>
+        </div>
+      </div>
+      <p>{{ blurbs[s] }}</p>
+      <div class="sc-thumbs">
+        {% for v in recent[s] %}
+          <div class="sc-thumb">{% if v.thumb %}<img src="{{ url_for('thumb', slug=v.slug) }}" alt="" loading="lazy">{% endif %}</div>
+        {% else %}
+          <div class="sc-empty">{{ _('Nothing here yet') }}</div>
+        {% endfor %}
+      </div>
+      <span class="sc-go">{{ _('Open') }} &rarr;</span>
+    </a>
+  {% endfor %}
+</div>
+
+<div class="listhead">
+  <h2>{{ _('Recently added') }}</h2>
+</div>
+{% if latest %}
+  <div class="grid">
+    {% for v in latest %}{% include "_card.html" %}{% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    <p>{{ _('Your library is empty.') }}</p>
+    <a class="btn primary" href="{{ url_for('upload') }}">{{ _('Upload your first video') }}</a>
+  </div>
+{% endif %}
+{% endblock %}

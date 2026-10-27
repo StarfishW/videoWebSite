@@ -20,6 +20,18 @@
   {% if v.thumb %}<meta name="twitter:image" content="{{ url_for('thumb', slug=v.slug, _external=True) }}">{% endif %}
 {% endblock %}
 {% block content %}
+{% if is_admin %}
+  <nav class="breadcrumb s-{{ v.section }}" aria-label="{{ _('Breadcrumb') }}">
+    <a href="{{ section_url(v.section) }}"><span aria-hidden="true">{{ section_icons[v.section]|safe }}</span> {{ _(section_labels[v.section]) }}</a>
+    {% if v.section == 'algorithms' and v.problem %}
+      <span aria-hidden="true">›</span>
+      <a href="{{ url_for('algorithms', v=v.slug) }}">{% if v.problem_no is not none %}{{ v.problem_no }}. {% endif %}{{ v.problem }}</a>
+    {% elif v.category_name %}
+      <span aria-hidden="true">›</span>
+      <a href="{{ section_url(v.section, category=v.category_id) }}">{{ v.category_name }}</a>
+    {% endif %}
+  </nav>
+{% endif %}
 <div class="watch">
   <div class="watch-main">
     <video class="player" controls preload="metadata" playsinline
@@ -32,7 +44,7 @@
     <div class="watch-bar">
       <div class="meta">
         {% if v.category_name %}
-          {% if is_admin %}<a class="tag" href="{{ url_for('index', category=v.category_id) }}">{{ v.category_name }}</a>
+          {% if is_admin %}<a class="tag s-{{ v.section }}" href="{{ section_url(v.section, category=v.category_id) }}">{{ v.category_name }}</a>
           {% else %}<span class="tag">{{ v.category_name }}</span>{% endif %}
         {% else %}
           <span class="tag muted">{{ _('Uncategorized') }}</span>

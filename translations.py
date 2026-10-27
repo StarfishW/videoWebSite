@@ -197,6 +197,48 @@ ZH = {
     "The new password is the same as the current one.": "新密码与当前密码相同。",
     "Password changed. Other devices have been logged out.": "密码已修改，其他设备已退出登录。",
     "File is too large (limit is {gb} GB).": "文件太大（上限为 {gb} GB）。",
+    "Category saved.": "分类已保存。",
+
+    # sections / navigation
+    "Sections": "栏目",
+    "Algorithms": "算法",
+    "AI Tutorials": "AI 教程",
+    "Popular Science": "科普",
+    "Manage": "管理",
+    "Breadcrumb": "导航路径",
+    "{n} videos in three sections": "共 {n} 个视频，分为三个栏目",
+    "Problems explained step by step, in several styles each.": "一步步讲清每道题，每题都有多种风格的讲解。",
+    "Hands-on AI tutorials.": "动手实践的 AI 教程。",
+    "Friendly explainers for everyone.": "人人都能看懂的科普讲解。",
+    "Nothing here yet": "这里还没有内容",
+    "Open": "进入",
+    "Recently added": "最近上传",
+    "Search results": "搜索结果",
+    "Other": "其他",
+
+    # algorithms page
+    "No algorithm videos yet": "还没有算法视频",
+    "Put a category in the Algorithms section (Manage → Categories) and its videos will show up here.":
+        "把某个分类放进「算法」栏目（管理 → 分类），它的视频就会出现在这里。",
+    "{n} problems": "{n} 道题",
+    "Filter problems…": "筛选题目…",
+    "Problems": "题目",
+    "No problems match.": "没有匹配的题目。",
+    "Versions": "版本",
+
+    # categories / edit
+    "Section": "栏目",
+    "Each category belongs to one section. Algorithms videos appear in the problem list; the other two sections show a grid.":
+        "每个分类属于一个栏目。「算法」栏目的视频会出现在题目列表里，另外两个栏目以网格显示。",
+    "Save": "保存",
+    "No categories in this section yet.": "这个栏目里还没有分类。",
+    "Algorithm problem": "算法题目",
+    "Used by the problem list in the Algorithms section. Videos with the same series and number are shown as versions of one problem.":
+        "用于「算法」栏目的题目列表。系列和题号相同的视频，会作为同一道题的不同版本显示。",
+    "Series": "系列",
+    "No.": "题号",
+    "Problem": "题目",
+    "e.g. Trapping Rain Water": "例如：接雨水",
 
     # JavaScript
     "Your browser can't preview this format, so no frame was captured. Pick an image below, or a placeholder will be shown.":

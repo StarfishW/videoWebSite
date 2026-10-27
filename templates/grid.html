@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ (active_name ~ ' · ') if active_name }}{{ _(section_labels[section]) ~ ' · ' if section }}{{ site_name }}{% endblock %}
+{% block content %}
+{% if section %}
+  <div class="page-head s-{{ section }}">
+    <span class="ph-ico" aria-hidden="true">{{ section_icons[section]|safe }}</span>
+    <div>
+      <h1>{{ _(section_labels[section]) }}</h1>
+      <span class="hint">{{ _('1 video') if total == 1 else _('{n} videos', n=total) }}</span>
+    </div>
+  </div>
+
+  {% if categories or uncategorized %}
+  <div class="chips" role="navigation" aria-label="{{ _('Categories') }}">
+    <a class="chip {{ 'active' if not cat }}" href="{{ section_url(section, q=q or None, sort=sort) }}">{{ _('All') }} <span>{{ total }}</span></a>
+    {% for c in categories %}
+      <a class="chip {{ 'active' if cat == c.id|string }}" href="{{ section_url(section, category=c.id, q=q or None, sort=sort) }}">{{ c.name }} <span>{{ c.n }}</span></a>
+    {% endfor %}
+    {% if uncategorized %}
+      <a class="chip {{ 'active' if cat == 'none' }}" href="{{ section_url(section, category='none', q=q or None, sort=sort) }}">{{ _('Uncategorized') }} <span>{{ uncategorized }}</span></a>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endif %}
+
+<div class="listhead">
+  <h2>
+    {% if section %}{{ active_name or _('All videos') }}{% else %}{{ _('Search results') }}{% endif %}
+    {% if q %} <small>{{ _('matching “{q}”', q=q) }}</small>{% endif %}
+  </h2>
+  <form method="get" class="sort">
+    {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    {% if cat %}<input type="hidden" name="category" value="{{ cat }}">{% endif %}
+    <label>{{ _('Sort') }}
+      <select name="sort" onchange="this.form.submit()">
+        <option value="new" {{ 'selected' if sort == 'new' }}>{{ _('Newest first') }}</option>
+        <option value="old" {{ 'selected' if sort == 'old' }}>{{ _('Oldest first') }}</option>
+        <option value="title" {{ 'selected' if sort == 'title' }}>{{ _('Title A–Z') }}</option>
+      </select>
+    </label>
+  </form>
+</div>
+
+{% if videos %}
+  <div class="grid">
+    {% for v in videos %}{% include "_card.html" %}{% endfor %}
+  </div>
+{% else %}
+  <div class="empty">
+    {% if q or cat %}
+      <p>{{ _('No videos found.') }}</p>
+      <a class="btn" href="{{ section_url(section) if section else url_for('index') }}">{{ _('Show all videos') }}</a>
+    {% else %}
+      <p>{{ _('Nothing here yet') }}</p>
+      <a class="btn primary" href="{{ url_for('upload') }}">{{ _('Upload') }}</a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

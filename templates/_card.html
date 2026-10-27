@@ -1,0 +1,15 @@
+{# One video card. Expects `v` (a video row with category_name and section). #}
+<article class="card">
+  <a href="{{ url_for('video', slug=v.slug) }}" class="card-link">{% include "_thumb.html" %}</a>
+  <div class="card-body">
+    <a href="{{ url_for('video', slug=v.slug) }}" class="card-title">{{ v.title }}</a>
+    <div class="meta">
+      {% if v.category_name %}
+        <a class="tag s-{{ v.section }}" href="{{ section_url(v.section, category=v.category_id) }}">{{ v.category_name }}</a>
+      {% else %}
+        <span class="tag muted">{{ _('Uncategorized') }}</span>
+      {% endif %}
+      <span title="{{ _('Upload date') }}">{{ v.created_at|date }}</span>
+    </div>
+  </div>
+</article>

@@ -10,41 +10,52 @@
 </head>
 <body>
 <header class="topbar">
-  {% if is_admin %}
-  <a class="brand" href="{{ url_for('index') }}"><span class="logo">&#9654;</span>{{ site_name }}</a>
-  <form class="search" action="{{ url_for('index') }}" method="get" role="search">
-    <input type="search" name="q" value="{{ request.args.get('q', '') }}" placeholder="{{ _('Search videos…') }}" aria-label="{{ _('Search videos…') }}">
-    {% if request.endpoint == 'index' and request.args.get('category') %}
-      <input type="hidden" name="category" value="{{ request.args.get('category') }}">
-    {% endif %}
-  </form>
-  {% else %}
-  {# Visitors only see the video they were given a link to - no way into the library. #}
-  <span class="brand"><span class="logo">&#9654;</span>{{ site_name }}</span>
-  <span class="spacer"></span>
-  {% endif %}
-  <nav class="nav">
+  <div class="topbar-inner">
     {% if is_admin %}
-      <a class="btn primary" href="{{ url_for('upload') }}">&#8679; {{ _('Upload') }}</a>
-      <a class="btn" href="{{ url_for('categories') }}">{{ _('Categories') }}</a>
-      <a class="btn" href="{{ url_for('api_docs') }}">API</a>
-      <a class="btn" href="{{ url_for('account') }}">{{ _('Password') }}</a>
-      <form action="{{ url_for('logout') }}" method="post" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <button class="btn ghost" type="submit">{{ _('Log out') }}</button>
+      <a class="brand" href="{{ url_for('index') }}"><span class="logo">&#9654;</span><span class="brand-name">{{ site_name }}</span></a>
+      <nav class="sections" aria-label="{{ _('Sections') }}">
+        {% for s in sections %}
+          <a class="section-tab s-{{ s }} {{ 'active' if active_section == s }}" href="{{ section_url(s) }}">
+            <span class="ico" aria-hidden="true">{{ section_icons[s]|safe }}</span>{{ _(section_labels[s]) }}</a>
+        {% endfor %}
+      </nav>
+      <form class="search" action="{{ url_for('index') }}" method="get" role="search">
+        <input type="search" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'index' else '' }}"
+               placeholder="{{ _('Search videos…') }}" aria-label="{{ _('Search videos…') }}">
       </form>
     {% else %}
-      <a class="btn" href="{{ url_for('login', next=request.full_path) }}">{{ _('Admin login') }}</a>
+      {# Visitors only see the video they were given a link to - no way into the library. #}
+      <span class="brand"><span class="logo">&#9654;</span><span class="brand-name">{{ site_name }}</span></span>
+      <span class="spacer"></span>
     {% endif %}
-    <div class="lang-switch" title="{{ _('Language') }}">
-      <span aria-hidden="true">&#127760;</span>
-      <select aria-label="{{ _('Language') }}" onchange="location.href=this.value">
-        {% for code, label in languages.items() %}
-          <option value="{{ url_for('set_language', code=code, next=request.full_path) }}" {{ 'selected' if code == lang }}>{{ label }}</option>
-        {% endfor %}
-      </select>
+    <div class="nav">
+      {% if is_admin %}
+        <a class="btn primary" href="{{ url_for('upload') }}"><span aria-hidden="true">&#8679;</span><span class="hide-sm"> {{ _('Upload') }}</span></a>
+        <details class="menu">
+          <summary class="btn ghost" aria-label="{{ _('Manage') }}"><span aria-hidden="true">&#9776;</span><span class="hide-sm"> {{ _('Manage') }}</span></summary>
+          <div class="menu-panel">
+            <a href="{{ url_for('categories') }}">{{ _('Categories') }}</a>
+            <a href="{{ url_for('api_docs') }}">API</a>
+            <a href="{{ url_for('account') }}">{{ _('Password') }}</a>
+            <form action="{{ url_for('logout') }}" method="post">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <button type="submit">{{ _('Log out') }}</button>
+            </form>
+          </div>
+        </details>
+      {% else %}
+        <a class="btn ghost" href="{{ url_for('login', next=request.full_path) }}">{{ _('Admin login') }}</a>
+      {% endif %}
+      <label class="lang-switch" title="{{ _('Language') }}">
+        <span aria-hidden="true">&#127760;</span>
+        <select aria-label="{{ _('Language') }}" onchange="location.href=this.value">
+          {% for code, label in languages.items() %}
+            <option value="{{ url_for('set_language', code=code, next=request.full_path) }}" {{ 'selected' if code == lang }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
     </div>
-  </nav>
+  </div>
 </header>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -55,9 +66,15 @@
   {% endif %}
 {% endwith %}
 
-<main class="container">
+<main class="container {% block main_class %}{% endblock %}">
   {% block content %}{% endblock %}
 </main>
+<script>
+  // close the Manage menu when clicking elsewhere
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
