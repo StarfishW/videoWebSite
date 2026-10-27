@@ -104,8 +104,28 @@ app.json.sort_keys = False
 app.json.ensure_ascii = False
 # Behind nginx/Caddy/etc., build links from the domain and scheme the visitor used
 # (X-Forwarded-Host / X-Forwarded-Proto). Without a proxy the Host header is used as-is.
+FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "0") == "1"
+
+
+class _HttpsFromCloudflare:
+    """Cloudflare talks to us over plain HTTP but says what the visitor used in CF-Visitor
+    ({"scheme":"https"}). Use it (or FORCE_HTTPS=1) so share links, QR codes and API
+    responses are https:// links."""
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        if FORCE_HTTPS or '"https"' in environ.get("HTTP_CF_VISITOR", ""):
+            environ["wsgi.url_scheme"] = "https"
+        return self.wsgi_app(environ, start_response)
+
+
 if os.environ.get("TRUST_PROXY", "1") != "0":
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+    # ProxyFix runs first (X-Forwarded-*), then the Cloudflare check gets the last word on the scheme.
+    app.wsgi_app = ProxyFix(_HttpsFromCloudflare(app.wsgi_app),
+                            x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+elif FORCE_HTTPS:
+    app.wsgi_app = _HttpsFromCloudflare(app.wsgi_app)
 
 
 # ---------------------------------------------------------------- database

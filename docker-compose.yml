@@ -11,5 +11,6 @@ services:
       VIDEO_ADMIN_PASS: "${VIDEO_ADMIN_PASS:-admin}"
       VIDEO_MAX_UPLOAD_GB: "${VIDEO_MAX_UPLOAD_GB:-20}"
       SITE_NAME: "${SITE_NAME:-Video Library}"
+      FORCE_HTTPS: "${FORCE_HTTPS:-0}"
     volumes:
       - ./data:/app/data

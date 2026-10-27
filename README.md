@@ -123,5 +123,6 @@ Everything is in the `data` folder - back this up to back up your library:
 | `VIDEO_MAX_UPLOAD_GB` | `20` | Largest allowed upload |
 | `SITE_NAME` | `Video Library` | Name shown in the header |
 | `TRUST_PROXY` | `1` | Use `X-Forwarded-Host/Proto` headers for links; set `0` if not behind a proxy and you want to ignore them |
+| `FORCE_HTTPS` | `0` | Set `1` to always build `https://` links. Not needed behind Cloudflare, which is detected automatically |
 
 Example (PowerShell): `$env:VIDEO_ADMIN_PASS = "something-strong"; python app.py`
