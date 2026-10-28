@@ -38,7 +38,6 @@
            {% if v.thumb %}poster="{{ url_for('thumb', slug=v.slug) }}"{% endif %}>
       <source src="{{ url_for('media', slug=v.slug) }}"{% if v.mime %} type="{{ v.mime }}"{% endif %}>
     </video>
-    {% with player='player', download='dl-btn' %}{% include '_speed.html' %}{% endwith %}
     <p class="hint" id="noplay" hidden>{{ _("Your browser can't play this format ({ext}). Download the file to watch it.", ext=v.original_name|ext) }}</p>
 
     <h1 class="watch-title">{{ v.title }}</h1>
@@ -55,6 +54,7 @@
         <span>{{ v.size|filesize }}</span>
       </div>
       <div class="actions">
+        {% with player='player', download='dl-btn' %}{% include '_speed.html' %}{% endwith %}
         <button class="btn primary" type="button" id="share-open">&#10150; {{ _('Share') }}</button>
         <a class="btn" id="dl-btn" href="{{ url_for('download', slug=v.slug) }}">&#8681; {{ _('Download') }}</a>
         {% if is_admin %}

@@ -1,4 +1,4 @@
-/* Playback speed picker: sets the player's speed and makes the Download button
+/* Playback speed menu: sets the player's speed and makes the Download button
    fetch a copy re-encoded at that speed (the server prepares it, we wait). */
 (function () {
   var KEY = 'playbackSpeed';
@@ -19,8 +19,10 @@
     var dl = document.getElementById(box.dataset.download);
     var min = parseFloat(box.dataset.min) || 0.25, max = parseFloat(box.dataset.max) || 4;
     var canEncode = box.dataset.encode === '1';
-    var input = box.querySelector('input');
-    var buttons = box.querySelectorAll('.speed-btn');
+    var input = box.querySelector('.speed-num input');
+    var range = box.querySelector('.speed-range');
+    var now = box.querySelector('.speed-now');
+    var buttons = box.querySelectorAll('.speed-opt');
     var label = dl ? dl.textContent.trim() : '';
     var rate = 1, busy = false;
 
@@ -42,7 +44,7 @@
 
     function setRate(r, remember) {
       r = clean(r);
-      if (r === null) { input.value = rate === 1 || isPreset(rate) ? '' : fmt(rate); return; }
+      if (r === null) { input.value = fmt(rate); return; }
       rate = r;
       if (video) { video.defaultPlaybackRate = r; video.playbackRate = r; }
       buttons.forEach(function (b) {
@@ -50,8 +52,11 @@
         b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-      input.value = isPreset(r) ? '' : fmt(r);
+      if (document.activeElement !== input) input.value = fmt(r);
+      range.value = r;
+      now.textContent = fmt(r) + 'x';
       box.classList.toggle('custom-on', !isPreset(r));
+      box.classList.toggle('changed', r !== 1);
       if (remember) save(r);
       updateDownload();
     }
@@ -60,9 +65,24 @@
       return false;
     }
 
-    buttons.forEach(function (b) { b.addEventListener('click', function () { setRate(b.dataset.rate, true); }); });
-    input.addEventListener('change', function () { setRate(input.value, true); });
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); setRate(input.value, true); } });
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () { setRate(b.dataset.rate, true); box.removeAttribute('open'); });
+    });
+    range.addEventListener('input', function () { setRate(range.value, true); });
+    input.addEventListener('change', function () { setRate(input.value, true); input.value = fmt(rate); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); setRate(input.value, true); input.value = fmt(rate); box.removeAttribute('open'); }
+    });
+    // keep the menu on screen: it opens leftwards, unless there is no room for that
+    var panel = box.querySelector('.speed-panel');
+    box.addEventListener('toggle', function () {
+      if (!box.open) return;
+      panel.classList.remove('flip');
+      if (panel.getBoundingClientRect().left < 8) panel.classList.add('flip');
+    });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && box.open) { box.removeAttribute('open'); box.querySelector('summary').focus(); }
+    });
 
     if (video) {
       // speed changed from the browser's own player menu: follow it

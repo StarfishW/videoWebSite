@@ -326,20 +326,30 @@ a.tag:hover { text-decoration: underline; }
 .player { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); display: block; box-shadow: var(--shadow); }
 .player.small { margin-bottom: 8px; box-shadow: none; }
 
-/* playback speed picker */
-.speed { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 10px 0 2px; font-size: .85rem; }
-.speed-label { color: var(--muted); font-weight: 600; }
-.speed-opts { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
-.speed-btn { border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; font-variant-numeric: tabular-nums; }
-.speed-btn:hover { background: var(--surface-3); }
-.speed-btn.active { background: var(--accent); color: var(--accent-text); }
-.speed-custom { display: inline-flex; align-items: center; gap: 2px; padding: 0 8px 0 4px; border-radius: 999px; color: var(--muted); }
-.speed-custom input { width: 4.6em; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 4px 2px 4px 6px; text-align: right; -moz-appearance: textfield; }
-.speed-custom input::-webkit-inner-spin-button, .speed-custom input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.speed-custom input:focus { outline: none; }
-.speed-custom:focus-within { box-shadow: 0 0 0 2px var(--accent); }
-.speed.custom-on .speed-custom { background: var(--accent); color: var(--accent-text); }
-.speed.custom-on .speed-custom input { color: var(--accent-text); }
+/* playback speed menu */
+.speed summary { gap: 6px; font-variant-numeric: tabular-nums; }
+.speed .speed-now { min-width: 2.6em; text-align: left; }
+.speed .speed-caret { opacity: .6; transition: transform .15s; }
+.speed[open] .speed-caret { transform: rotate(180deg); }
+.speed.changed summary { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
+.speed-panel { width: 248px; max-width: calc(100vw - 24px); padding: 6px; gap: 1px; }
+.speed-panel.flip { right: auto; left: 0; }
+.speed-head { padding: 6px 10px 6px; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.menu-panel .speed-opt { display: flex; align-items: center; gap: 8px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.speed-opt .speed-sub { color: var(--muted); font-weight: 400; font-size: .85rem; }
+.speed-opt .speed-check { margin-left: auto; color: var(--accent); visibility: hidden; }
+.speed-opt.active { color: var(--accent); }
+.speed-opt.active .speed-check { visibility: visible; }
+.speed-custom { margin-top: 4px; padding: 10px 10px 4px; border-top: 1px solid var(--border); }
+.speed-custom-head { display: flex; align-items: center; justify-content: space-between; font-size: .92rem; font-weight: 600; }
+.speed.custom-on .speed-custom-head > span { color: var(--accent); }
+.speed-num { display: inline-flex; align-items: center; gap: 3px; margin: 0; color: var(--muted); font-weight: 600; }
+.speed-num input { margin: 0; width: 4.2em; padding: 4px 6px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.speed-num input::-webkit-inner-spin-button, .speed-num input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.speed-range { width: 100%; margin: 12px 0 2px; padding: 0; border: 0; background: none; accent-color: var(--accent); cursor: pointer; }
+.speed-range:focus { outline: none; }
+.speed-scale { display: flex; justify-content: space-between; font-size: .72rem; color: var(--muted); }
+.speed-note { margin: 4px 10px 6px; font-size: .78rem; color: var(--muted); }
 .btn.busy { cursor: progress; opacity: .75; }
 .speed-wait .progress { max-width: 420px; margin: 18px auto 6px; }
 .speed-wait-text { font-weight: 600; font-variant-numeric: tabular-nums; }

@@ -1,14 +1,33 @@
-{# Playback speed picker. Needs: player (video element id), download (download link id). #}
-<div class="speed" data-player="{{ player }}" data-download="{{ download }}"
-     data-min="{{ speed_min }}" data-max="{{ speed_max }}" data-encode="{{ 1 if speed_download else 0 }}">
-  <span class="speed-label">{{ _('Speed') }}</span>
-  <div class="speed-opts" role="group" aria-label="{{ _('Playback speed') }}">
+{# Playback speed menu. Needs: player (video element id), download (download link id). #}
+<details class="menu speed" data-player="{{ player }}" data-download="{{ download }}"
+         data-min="{{ speed_min }}" data-max="{{ speed_max }}" data-encode="{{ 1 if speed_download else 0 }}">
+  <summary class="btn" aria-label="{{ _('Playback speed') }}" title="{{ _('Playback speed') }}">
+    <svg class="speed-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M12 4a9 9 0 0 0-7.8 13.5h15.6A9 9 0 0 0 12 4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <path d="m12 13.5 4-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <span class="speed-now">1x</span>
+    <svg class="speed-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </summary>
+  <div class="menu-panel speed-panel" role="group" aria-label="{{ _('Playback speed') }}">
+    <div class="speed-head">{{ _('Playback speed') }}</div>
     {% for s in speed_presets %}
-      <button type="button" class="speed-btn" data-rate="{{ s }}" aria-pressed="false">{{ '%.1f'|format(s) }}x</button>
+      <button type="button" class="speed-opt" data-rate="{{ s }}" aria-pressed="false">
+        <span>{{ '%.1f'|format(s) }}x</span>
+        {% if s == 1 %}<span class="speed-sub">{{ _('Normal') }}</span>{% endif %}
+        <svg class="speed-check" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     {% endfor %}
-    <label class="speed-custom" title="{{ _('Custom speed ({min}x – {max}x)', min=speed_min, max=speed_max) }}">
-      <input type="number" min="{{ speed_min }}" max="{{ speed_max }}" step="0.05" inputmode="decimal"
-             placeholder="{{ _('Custom') }}" aria-label="{{ _('Custom speed') }}"><span aria-hidden="true">x</span>
-    </label>
+    <div class="speed-custom">
+      <div class="speed-custom-head">
+        <span>{{ _('Custom') }}</span>
+        <label class="speed-num"><input type="number" min="{{ speed_min }}" max="{{ speed_max }}" step="0.05"
+               inputmode="decimal" aria-label="{{ _('Custom speed') }}"><span aria-hidden="true">x</span></label>
+      </div>
+      <input class="speed-range" type="range" min="{{ speed_min }}" max="{{ speed_max }}" step="0.05" value="1"
+             aria-label="{{ _('Custom speed') }}">
+      <div class="speed-scale" aria-hidden="true"><span>{{ speed_min }}x</span><span>{{ speed_max|int }}x</span></div>
+    </div>
+    {% if speed_download %}<p class="speed-note">{{ _('Downloads use this speed too.') }}</p>{% endif %}
   </div>
-</div>
+</details>

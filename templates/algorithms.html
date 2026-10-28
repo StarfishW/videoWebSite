@@ -53,7 +53,6 @@
 
     <video id="algo-player" class="player" controls preload="metadata" playsinline
            {% if cur.thumb %}poster="{{ cur.thumb }}"{% endif %} src="{{ cur.media }}"></video>
-    {% with player='algo-player', download='algo-download' %}{% include '_speed.html' %}{% endwith %}
 
     <div class="vtabs" id="algo-tabs" role="tablist" aria-label="{{ _('Versions') }}"
          {% if current.problem.cards|length < 2 %}hidden{% endif %}>
@@ -74,6 +73,7 @@
         </div>
       </div>
       <div class="actions">
+        {% with player='algo-player', download='algo-download' %}{% include '_speed.html' %}{% endwith %}
         <a class="btn" id="algo-open" href="{{ cur.page }}">&#10150; {{ _('Share') }}</a>
         <a class="btn" id="algo-download" href="{{ cur.download }}">&#8681; {{ _('Download') }}</a>
         <a class="btn ghost" id="algo-edit" href="{{ cur.edit }}">{{ _('Edit') }}</a>

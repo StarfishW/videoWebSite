@@ -263,11 +263,11 @@ ZH = {
     "Copied": "已复制",
 
     # playback speed
-    "Speed": "倍速",
     "Playback speed": "播放速度",
     "Custom": "自定义",
     "Custom speed": "自定义倍速",
-    "Custom speed ({min}x – {max}x)": "自定义倍速（{min}x – {max}x）",
+    "Normal": "正常",
+    "Downloads use this speed too.": "下载的视频也会使用这个倍速。",
     "Preparing {speed}x…": "正在准备 {speed}x…",
     "Preparing {speed}x… {pct}%": "正在准备 {speed}x… {pct}%",
     "Waiting in line…": "排队中…",
