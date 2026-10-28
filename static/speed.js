@@ -38,8 +38,17 @@
       url.searchParams.delete('speed');
       if (rate !== 1 && canEncode) url.searchParams.set('speed', fmt(rate));
       dl.setAttribute('href', url.pathname + url.search);
-      dl.textContent = rate !== 1 && canEncode ? label + ' · ' + fmt(rate) + 'x' : label;
       dl.title = rate !== 1 && !canEncode ? t('Downloads are at normal speed (ffmpeg is not installed on the server).') : '';
+      // While the menu is open the label stays as it is, so the buttons don't move
+      // under the slider; it catches up when the menu closes.
+      if (box.open) return;
+      dl.textContent = label;
+      if (rate !== 1 && canEncode) {
+        var tag = document.createElement('span');
+        tag.className = 'dl-speed';
+        tag.textContent = '· ' + fmt(rate) + 'x';
+        dl.appendChild(tag);
+      }
     }
 
     function setRate(r, remember) {
@@ -76,7 +85,7 @@
     // keep the menu on screen: it opens leftwards, unless there is no room for that
     var panel = box.querySelector('.speed-panel');
     box.addEventListener('toggle', function () {
-      if (!box.open) return;
+      if (!box.open) { updateDownload(); return; }
       panel.classList.remove('flip');
       if (panel.getBoundingClientRect().left < 8) panel.classList.add('flip');
     });

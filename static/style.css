@@ -328,7 +328,8 @@ a.tag:hover { text-decoration: underline; }
 
 /* playback speed menu */
 .speed summary { gap: 6px; font-variant-numeric: tabular-nums; }
-.speed .speed-now { min-width: 2.6em; text-align: left; }
+.speed .speed-now { display: inline-block; width: 2.9em; text-align: center; font-variant-numeric: tabular-nums; }
+.dl-speed { display: inline-block; min-width: 3.7em; text-align: left; font-variant-numeric: tabular-nums; }
 .speed .speed-caret { opacity: .6; transition: transform .15s; }
 .speed[open] .speed-caret { transform: rotate(180deg); }
 .speed.changed summary { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); }
