@@ -1,0 +1,14 @@
+{# Playback speed picker. Needs: player (video element id), download (download link id). #}
+<div class="speed" data-player="{{ player }}" data-download="{{ download }}"
+     data-min="{{ speed_min }}" data-max="{{ speed_max }}" data-encode="{{ 1 if speed_download else 0 }}">
+  <span class="speed-label">{{ _('Speed') }}</span>
+  <div class="speed-opts" role="group" aria-label="{{ _('Playback speed') }}">
+    {% for s in speed_presets %}
+      <button type="button" class="speed-btn" data-rate="{{ s }}" aria-pressed="false">{{ '%.1f'|format(s) }}x</button>
+    {% endfor %}
+    <label class="speed-custom" title="{{ _('Custom speed ({min}x – {max}x)', min=speed_min, max=speed_max) }}">
+      <input type="number" min="{{ speed_min }}" max="{{ speed_max }}" step="0.05" inputmode="decimal"
+             placeholder="{{ _('Custom') }}" aria-label="{{ _('Custom speed') }}"><span aria-hidden="true">x</span>
+    </label>
+  </div>
+</div>

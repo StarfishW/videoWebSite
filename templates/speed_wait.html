@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Preparing download') }} · {{ site_name }}{% endblock %}
+{% block content %}
+<div class="empty speed-wait">
+  <h1>{{ _('Preparing {title} at {speed}x', title=v.title, speed=speed) }}</h1>
+  <p class="hint">{{ _('The video is being converted to the new speed. The download starts by itself when it is ready - you can keep this page open.') }}</p>
+  <div class="progress"><div class="progress-bar" id="speed-bar" style="width: {{ job.progress }}%"></div></div>
+  <p id="speed-text" class="speed-wait-text">{{ _('Waiting in line…') if job.state == 'queued' else job.progress ~ '%' }}</p>
+  <p><a class="btn" id="speed-link" href="{{ url_for('download', slug=v.slug, speed=speed) }}" hidden>&#8681; {{ _('Download') }}</a>
+     <a class="btn ghost" href="{{ url_for('video', slug=v.slug) }}">{{ _('Back to the video') }}</a></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var T = window.I18N || {};
+  var status = {{ url_for('download_status', slug=v.slug, speed=speed)|tojson }};
+  var bar = document.getElementById('speed-bar'), text = document.getElementById('speed-text');
+  var link = document.getElementById('speed-link');
+  (function poll() {
+    fetch(status, { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      bar.style.width = (d.progress || 0) + '%';
+      if (d.state === 'done') {
+        bar.style.width = '100%';
+        text.textContent = T['Ready - your download should start now.'] || 'Ready - your download should start now.';
+        link.hidden = false;
+        location.href = d.url;
+      } else if (d.state === 'error') {
+        text.textContent = (T['Could not prepare the video at this speed.'] || 'Could not prepare the video at this speed.') + (d.error ? ' ' + d.error : '');
+      } else {
+        text.textContent = d.state === 'queued' ? (T['Waiting in line…'] || 'Waiting in line…') : (d.progress || 0) + '%';
+        setTimeout(poll, 1500);
+      }
+    }).catch(function () { setTimeout(poll, 4000); });
+  })();
+})();
+</script>
+{% endblock %}

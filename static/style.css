@@ -325,6 +325,24 @@ a.tag:hover { text-decoration: underline; }
 .watch:not(:has(.related)) { grid-template-columns: minmax(0, 1100px); justify-content: center; }
 .player { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); display: block; box-shadow: var(--shadow); }
 .player.small { margin-bottom: 8px; box-shadow: none; }
+
+/* playback speed picker */
+.speed { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 10px 0 2px; font-size: .85rem; }
+.speed-label { color: var(--muted); font-weight: 600; }
+.speed-opts { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.speed-btn { border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.speed-btn:hover { background: var(--surface-3); }
+.speed-btn.active { background: var(--accent); color: var(--accent-text); }
+.speed-custom { display: inline-flex; align-items: center; gap: 2px; padding: 0 8px 0 4px; border-radius: 999px; color: var(--muted); }
+.speed-custom input { width: 4.6em; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 4px 2px 4px 6px; text-align: right; -moz-appearance: textfield; }
+.speed-custom input::-webkit-inner-spin-button, .speed-custom input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.speed-custom input:focus { outline: none; }
+.speed-custom:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+.speed.custom-on .speed-custom { background: var(--accent); color: var(--accent-text); }
+.speed.custom-on .speed-custom input { color: var(--accent-text); }
+.btn.busy { cursor: progress; opacity: .75; }
+.speed-wait .progress { max-width: 420px; margin: 18px auto 6px; }
+.speed-wait-text { font-weight: 600; font-variant-numeric: tabular-nums; }
 .watch-title { margin: 16px 0 8px; font-size: 1.45rem; }
 .watch-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

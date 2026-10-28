@@ -12,5 +12,7 @@ services:
       VIDEO_MAX_UPLOAD_GB: "${VIDEO_MAX_UPLOAD_GB:-20}"
       SITE_NAME: "${SITE_NAME:-Video Library}"
       FORCE_HTTPS: "${FORCE_HTTPS:-0}"
+      SPEED_CACHE_GB: "${SPEED_CACHE_GB:-10}"
+      SPEED_WORKERS: "${SPEED_WORKERS:-1}"
     volumes:
       - ./data:/app/data

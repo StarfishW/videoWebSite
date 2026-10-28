@@ -27,6 +27,13 @@
     (function () {
       var v = document.getElementById('v');
       var t = parseInt(new URLSearchParams(location.search).get('t'), 10);
+      // ?speed=1.5 or the speed this viewer last picked on the site
+      var s = parseFloat(new URLSearchParams(location.search).get('speed'));
+      if (!(s >= 0.25 && s <= 4)) { try { s = parseFloat(localStorage.getItem('playbackSpeed')); } catch (e) { s = NaN; } }
+      if (s >= 0.25 && s <= 4) {
+        v.defaultPlaybackRate = v.playbackRate = s;
+        v.addEventListener('loadedmetadata', function () { v.playbackRate = s; }, { once: true });
+      }
       if (t > 0) v.addEventListener('loadedmetadata', function () { v.currentTime = t; }, { once: true });
       function mark() { v.classList.toggle('paused', v.paused); }
       v.addEventListener('play', mark); v.addEventListener('pause', mark); mark();

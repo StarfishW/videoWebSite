@@ -22,6 +22,12 @@ JS_STRINGS = [
     "Hide",
     "Copy",
     "Copied",
+    "Preparing {speed}x…",
+    "Preparing {speed}x… {pct}%",
+    "Waiting in line…",
+    "Could not prepare the video at this speed.",
+    "Downloads are at normal speed (ffmpeg is not installed on the server).",
+    "Ready - your download should start now.",
 ]
 
 ZH = {
@@ -255,6 +261,25 @@ ZH = {
     "Hide": "隐藏",
     "Copy": "复制",
     "Copied": "已复制",
+
+    # playback speed
+    "Speed": "倍速",
+    "Playback speed": "播放速度",
+    "Custom": "自定义",
+    "Custom speed": "自定义倍速",
+    "Custom speed ({min}x – {max}x)": "自定义倍速（{min}x – {max}x）",
+    "Preparing {speed}x…": "正在准备 {speed}x…",
+    "Preparing {speed}x… {pct}%": "正在准备 {speed}x… {pct}%",
+    "Waiting in line…": "排队中…",
+    "Could not prepare the video at this speed.": "无法生成该倍速的视频。",
+    "Downloads are at normal speed (ffmpeg is not installed on the server).": "服务器未安装 ffmpeg，下载的是原速视频。",
+    "Ready - your download should start now.": "已完成，下载即将开始。",
+    "Preparing download": "正在准备下载",
+    "Preparing {title} at {speed}x": "正在生成 {speed}x 倍速的《{title}》",
+    "The video is being converted to the new speed. The download starts by itself when it is ready - you can keep this page open.": "正在把视频转换为新的倍速，完成后会自动开始下载，请保持此页面打开。",
+    "Back to the video": "返回视频",
+    "Not available": "不可用",
+    "Downloading at a different speed needs ffmpeg on the server.": "按其他倍速下载需要服务器安装 ffmpeg。",
 }
 
 CATALOGS = {"zh": ZH}

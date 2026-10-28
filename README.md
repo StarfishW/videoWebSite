@@ -49,6 +49,11 @@ To let other computers/phones on your network use it: `python app.py --host 0.0.
 - **Thumbnails, upload date, category and duration** shown on every video card.
 - **Filter** by category (chips at the top), **search** by title/description, **sort** by date or title.
 - **Download** the original file with its original name. Playback supports seeking.
+- **Playback speed:** pick 1.0x, 1.5x or 2.0x under the player, or type a custom speed (0.25x - 4x).
+  The video plays at that speed, and **Download** then gives a copy re-encoded at that speed (sound
+  kept at normal pitch). The first download at a new speed takes a moment to prepare (needs
+  ffmpeg, included in the Docker image); after that it is served from a cache. Each viewer's choice
+  is remembered, and a link can set it: `/v/3fa1c09b?speed=1.5` (also works for embeds).
 - **Share** without login: short links like `/v/3fa1c09b` (the first 8 characters of the file's
   MD5; a longer prefix is used if two different files clash, and identical files get `-2`, `-3`).
   Also an embed code, a QR code, and an optional start time (`?t=90`). Links always use the domain
@@ -112,6 +117,7 @@ Everything is in the `data` folder - back this up to back up your library:
 
 - `data/videos/` - the video files
 - `data/thumbs/` - thumbnail images
+- `data/speed/` - cached sped-up downloads (safe to delete; rebuilt when needed)
 - `data/library.db` - titles, categories, dates, password and API settings (SQLite)
 
 ## Settings (optional environment variables)
@@ -124,5 +130,7 @@ Everything is in the `data` folder - back this up to back up your library:
 | `SITE_NAME` | `Video Library` | Name shown in the header |
 | `TRUST_PROXY` | `1` | Use `X-Forwarded-Host/Proto` headers for links; set `0` if not behind a proxy and you want to ignore them |
 | `FORCE_HTTPS` | `0` | Set `1` to always build `https://` links. Not needed behind Cloudflare, which is detected automatically |
+| `SPEED_CACHE_GB` | `10` | Largest size of the sped-up download cache; the least recently used copies are deleted first |
+| `SPEED_WORKERS` | `1` | How many sped-up copies can be encoded at the same time (others wait in line) |
 
 Example (PowerShell): `$env:VIDEO_ADMIN_PASS = "something-strong"; python app.py`

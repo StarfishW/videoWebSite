@@ -16,6 +16,8 @@ import secrets
 import shutil
 import sqlite3
 import subprocess
+import threading
+import time
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -31,8 +33,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("VIDEO_DATA_DIR", os.path.join(BASE_DIR, "data"))
 VIDEO_DIR = os.path.join(DATA_DIR, "videos")
 THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
+SPEED_DIR = os.path.join(DATA_DIR, "speed")  # cached sped-up downloads
 DB_PATH = os.path.join(DATA_DIR, "library.db")
-for _d in (VIDEO_DIR, THUMB_DIR):
+for _d in (VIDEO_DIR, THUMB_DIR, SPEED_DIR):
     os.makedirs(_d, exist_ok=True)
 
 SITE_NAME = os.environ.get("SITE_NAME", "Video Library")
@@ -43,6 +46,13 @@ MIN_PASSWORD_LEN = 6
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
+
+# Playback speed: viewers pick any speed in this range. Downloads at a speed other
+# than 1x are re-encoded with ffmpeg once, then served from a cache.
+SPEED_MIN, SPEED_MAX = 0.25, 4.0
+SPEED_PRESETS = (1.0, 1.5, 2.0)
+SPEED_CACHE_GB = float(os.environ.get("SPEED_CACHE_GB", "10"))
+SPEED_WORKERS = max(1, int(os.environ.get("SPEED_WORKERS", "1")))
 
 VIDEO_EXT = {"mp4", "m4v", "webm", "ogv", "ogg", "mov", "mkv", "avi", "wmv",
              "flv", "mpg", "mpeg", "3gp", "ts"}
@@ -474,6 +484,8 @@ def _template_globals():
         "js_strings": {s: translate(s, lang) for s in JS_STRINGS},
         "sections": SECTIONS, "section_labels": SECTION_LABELS, "section_icons": SECTION_ICONS,
         "section_url": section_url, "active_section": _active_section(),
+        "speed_presets": SPEED_PRESETS, "speed_min": SPEED_MIN, "speed_max": SPEED_MAX,
+        "speed_download": bool(FFMPEG),
     }
 
 
@@ -712,6 +724,7 @@ def delete_video_row(v):
     db.commit()
     remove_file(VIDEO_DIR, v["filename"])
     remove_file(THUMB_DIR, v["thumb"])
+    remove_speed_copies(v["filename"])
 
 
 # ---------------------------------------------------------------- public pages
@@ -918,8 +931,162 @@ def media(slug):
 @app.route("/download/<slug>")
 def download(slug):
     v = video_by_ref(slug)
-    return send_from_directory(VIDEO_DIR, v["filename"], as_attachment=True,
-                               download_name=v["original_name"])
+    speed = parse_speed(request.args.get("speed"))
+    if speed is None:
+        return send_from_directory(VIDEO_DIR, v["filename"], as_attachment=True,
+                                   download_name=v["original_name"])
+    if not FFMPEG:
+        return render_template("message.html", title=_("Not available"),
+                               message=_("Downloading at a different speed needs ffmpeg on the server.")), 501
+    job = speed_job(v, speed)
+    if job["state"] == "done":
+        stem = os.path.splitext(v["original_name"])[0] or "video"
+        return send_from_directory(SPEED_DIR, speed_name(v["filename"], speed), as_attachment=True,
+                                   download_name=f"{stem} ({fmt_speed(speed)}x).mp4")
+    # Still encoding: show a page that waits, then starts the download.
+    return render_template("speed_wait.html", v=v, speed=fmt_speed(speed), job=job)
+
+
+@app.route("/download/<slug>/status")
+def download_status(slug):
+    """Starts (if needed) and reports the encode of a sped-up copy, as JSON."""
+    v = video_by_ref(slug)
+    speed = parse_speed(request.args.get("speed"))
+    if speed is None:
+        return jsonify(state="done", progress=100, url=url_for("download", slug=v["slug"]))
+    if not FFMPEG:
+        return jsonify(state="error", progress=0, error="ffmpeg is not installed"), 501
+    job = speed_job(v, speed)
+    return jsonify(state=job["state"], progress=job["progress"], error=job.get("error"),
+                   url=url_for("download", slug=v["slug"], speed=fmt_speed(speed)))
+
+
+# ---------------------------------------------------------------- playback speed downloads
+
+def parse_speed(raw):
+    """A valid speed other than 1x (rounded to 0.05), or None for normal speed / bad input."""
+    try:
+        speed = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not (SPEED_MIN <= speed <= SPEED_MAX):  # also rejects nan
+        return None
+    speed = round(round(speed * 20) / 20, 2)
+    return None if speed == 1.0 else speed
+
+
+def fmt_speed(speed):
+    return f"{speed:.2f}".rstrip("0").rstrip(".")
+
+
+def speed_name(filename, speed):
+    return f"{os.path.splitext(filename)[0]}@{fmt_speed(speed)}x.mp4"
+
+
+def remove_speed_copies(filename):
+    prefix = os.path.splitext(filename)[0] + "@"
+    for name in os.listdir(SPEED_DIR):
+        if name.startswith(prefix):
+            remove_file(SPEED_DIR, name)
+
+
+def atempo_chain(speed):
+    """atempo accepts 0.5-2.0 per filter, so chain several for bigger changes."""
+    parts = []
+    while speed > 2.0:
+        parts.append("atempo=2.0")
+        speed /= 2.0
+    while speed < 0.5:
+        parts.append("atempo=0.5")
+        speed /= 0.5
+    parts.append(f"atempo={speed:.6f}")
+    return ",".join(parts)
+
+
+_speed_jobs = {}  # cache file name -> {"state", "progress", "error", "at"}
+_speed_lock = threading.Lock()
+_speed_slots = threading.Semaphore(SPEED_WORKERS)
+
+
+def speed_job(v, speed):
+    """State of the sped-up copy, starting an encode if there is none yet."""
+    name = speed_name(v["filename"], speed)
+    path = os.path.join(SPEED_DIR, name)
+    with _speed_lock:
+        job = _speed_jobs.get(name)
+        if job and job["state"] in ("queued", "running"):
+            return dict(job)
+        if os.path.exists(path):
+            try:
+                os.utime(path)  # recently used: keep it in the cache longer
+            except OSError:
+                pass
+            return {"state": "done", "progress": 100}
+        if job and job["state"] == "error" and time.time() - job["at"] < 60:
+            return dict(job)  # don't restart a failing encode on every poll
+        job = _speed_jobs[name] = {"state": "queued", "progress": 0, "at": time.time()}
+    threading.Thread(target=_encode_speed, daemon=True,
+                     args=(os.path.join(VIDEO_DIR, v["filename"]), name, speed,
+                           v["duration"] or 0)).start()
+    return dict(job)
+
+
+def _set_job(name, **fields):
+    with _speed_lock:
+        _speed_jobs[name].update(fields, at=time.time())
+
+
+def _encode_speed(src, name, speed, duration):
+    with _speed_slots:
+        _set_job(name, state="running")
+        tmp = os.path.join(SPEED_DIR, name + ".part")
+        cmd = [FFMPEG, "-y", "-v", "error", "-nostats", "-progress", "pipe:1", "-i", src,
+               "-map", "0:v:0", "-filter:v", f"setpts=PTS/{speed}",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+               # "?" = only if the video has sound
+               "-map", "0:a:0?", "-filter:a", atempo_chain(speed), "-c:a", "aac", "-b:a", "128k",
+               "-movflags", "+faststart", "-f", "mp4", tmp]
+        total = duration / speed if duration else 0
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, errors="replace")
+            for line in proc.stdout:
+                if total and line.startswith("out_time_us="):
+                    try:
+                        done = int(line.split("=", 1)[1]) / 1e6
+                    except ValueError:
+                        continue
+                    _set_job(name, progress=max(0, min(99, int(done * 100 / total))))
+            err = proc.stderr.read()
+            proc.wait()
+            if proc.returncode != 0 or not os.path.exists(tmp):
+                raise RuntimeError(err.strip()[-300:] or f"ffmpeg exited with {proc.returncode}")
+            os.replace(tmp, os.path.join(SPEED_DIR, name))
+            _set_job(name, state="done", progress=100)
+        except Exception as exc:  # noqa: BLE001 - reported to the waiting page
+            remove_file(SPEED_DIR, name + ".part")
+            app.logger.warning("speed encode %s failed: %s", name, exc)
+            _set_job(name, state="error", error=str(exc) or "encode failed")
+            return
+    trim_speed_cache(keep=name)
+
+
+def trim_speed_cache(keep=None):
+    """Delete the least recently used copies once the cache is over SPEED_CACHE_GB."""
+    files = []
+    for n in os.listdir(SPEED_DIR):
+        p = os.path.join(SPEED_DIR, n)
+        if n.endswith(".mp4") and os.path.isfile(p):
+            st = os.stat(p)
+            files.append((st.st_mtime, st.st_size, n))
+    total = sum(f[1] for f in files)
+    limit = SPEED_CACHE_GB * 1024 ** 3
+    for _mtime, size, n in sorted(files):
+        if total <= limit:
+            break
+        if n != keep:
+            remove_file(SPEED_DIR, n)
+            total -= size
 
 
 @app.route("/thumb/<slug>")
