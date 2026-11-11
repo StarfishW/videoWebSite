@@ -9,6 +9,7 @@ import functools
 import hashlib
 import hmac
 import io
+import json
 import mimetypes
 import os
 import re
@@ -34,8 +35,9 @@ DATA_DIR = os.environ.get("VIDEO_DATA_DIR", os.path.join(BASE_DIR, "data"))
 VIDEO_DIR = os.path.join(DATA_DIR, "videos")
 THUMB_DIR = os.path.join(DATA_DIR, "thumbs")
 SPEED_DIR = os.path.join(DATA_DIR, "speed")  # cached sped-up downloads
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")  # chunked API uploads in progress
 DB_PATH = os.path.join(DATA_DIR, "library.db")
-for _d in (VIDEO_DIR, THUMB_DIR, SPEED_DIR):
+for _d in (VIDEO_DIR, THUMB_DIR, SPEED_DIR, UPLOAD_DIR):
     os.makedirs(_d, exist_ok=True)
 
 SITE_NAME = os.environ.get("SITE_NAME", "Video Library")
@@ -690,7 +692,6 @@ def store_video(file, title, description, category_id, thumbnail_file=None, dura
         raise UploadError(_("'.{ext}' is not a supported video type.", ext=ext))
 
     original = os.path.basename(file.filename.replace("\\", "/"))
-    title = (title or "").strip() or original.rsplit(".", 1)[0]
     stored = f"{uuid.uuid4().hex}.{ext}"
     path = os.path.join(VIDEO_DIR, stored)
     md5 = hashlib.md5()  # hash while saving, so big files are read only once
@@ -698,11 +699,19 @@ def store_video(file, title, description, category_id, thumbnail_file=None, dura
         for chunk in iter(lambda: file.stream.read(1024 * 1024), b""):
             md5.update(chunk)
             out.write(chunk)
-    md5 = md5.hexdigest()
+    mime = file.mimetype if (file.mimetype or "").startswith("video/") else None
+    return add_video(stored, original, md5.hexdigest(), mime, title, description, category_id,
+                     thumbnail_file, duration, problem)
 
+
+def add_video(stored, original, md5, mime, title, description, category_id, thumbnail_file=None,
+              duration=None, problem=None):
+    """Add a video file that is already in VIDEO_DIR to the library. Returns (id, title)."""
+    path = os.path.join(VIDEO_DIR, stored)
+    title = (title or "").strip() or original.rsplit(".", 1)[0]
     duration = parse_duration(duration) or probe_duration(path)
     thumb = save_thumbnail(thumbnail_file) or generate_thumbnail(path, duration)
-    mime = file.mimetype if (file.mimetype or "").startswith("video/") else mimetypes.guess_type(original)[0]
+    mime = mime or mimetypes.guess_type(original)[0]
     db = get_db()
     description = (description or "").strip()
     series, problem_no, problem_name = problem or detect_problem(db, title, description, category_id)
@@ -1427,6 +1436,172 @@ def api_upload_video():
     resp = jsonify(video_json(find_video(vid)))
     resp.status_code = 201
     resp.headers["Location"] = api_url("api_get_video", ref=find_video(vid)["slug"])
+    return resp
+
+
+# ---- chunked uploads: for files bigger than a proxy allows in one request
+# (Cloudflare's free plan stops at 100 MB). Start a session, PUT the file in pieces,
+# then "complete" it with the same fields as POST /videos.
+
+UPLOAD_CHUNK = 50 * 1024 * 1024  # suggested piece size
+UPLOAD_TTL = 24 * 3600           # unfinished uploads are deleted after a day
+_upload_lock = threading.Lock()
+
+
+def _upload_paths(uid):
+    if not re.fullmatch(r"[0-9a-f]{32}", uid or ""):
+        return None, None
+    base = os.path.join(UPLOAD_DIR, uid)
+    return base + ".json", base + ".part"
+
+
+def _load_upload(uid):
+    meta_path, part_path = _upload_paths(uid)
+    if not meta_path or not os.path.exists(meta_path):
+        return None
+    with open(meta_path, encoding="utf-8") as fh:
+        meta = json.load(fh)
+    meta["received"] = os.path.getsize(part_path) if os.path.exists(part_path) else 0
+    return meta
+
+
+def _upload_json(meta, status=200):
+    resp = jsonify(id=meta["id"], filename=meta["filename"], size=meta["size"],
+                   received=meta["received"], chunk_size=UPLOAD_CHUNK,
+                   url=api_url("api_upload_session", uid=meta["id"]))
+    resp.status_code = status
+    return resp
+
+
+def _drop_upload(uid):
+    meta_path, part_path = _upload_paths(uid)
+    for p in (meta_path, part_path):
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+
+
+def _clean_old_uploads():
+    now = time.time()
+    for name in os.listdir(UPLOAD_DIR):
+        p = os.path.join(UPLOAD_DIR, name)
+        try:
+            if now - os.path.getmtime(p) > UPLOAD_TTL:
+                os.remove(p)
+        except OSError:
+            pass
+
+
+@app.post("/api/<key>/uploads")
+@api_enabled
+@token_required
+def api_start_upload():
+    """JSON or form: filename (required), size in bytes (required)."""
+    data = request.get_json(silent=True) or request.form
+    filename = os.path.basename(str(data.get("filename") or "").replace("\\", "/"))
+    ext = ext_of(filename)
+    if not filename or ext not in VIDEO_EXT:
+        return api_error(f"filename must end in a video extension ({', '.join(sorted(VIDEO_EXT))}).")
+    try:
+        size = int(data.get("size"))
+    except (TypeError, ValueError):
+        return api_error("size (in bytes) is required.")
+    if not 0 < size <= app.config["MAX_CONTENT_LENGTH"]:
+        return api_error(f"size must be between 1 byte and {MAX_UPLOAD_GB:g} GB.")
+    _clean_old_uploads()
+    uid = uuid.uuid4().hex
+    meta = {"id": uid, "filename": filename[:255], "size": size, "created": time.time()}
+    meta_path, part_path = _upload_paths(uid)
+    with open(meta_path, "w", encoding="utf-8") as fh:
+        json.dump(meta, fh)
+    open(part_path, "wb").close()
+    meta["received"] = 0
+    return _upload_json(meta, 201)
+
+
+@app.route("/api/<key>/uploads/<uid>", methods=["GET", "PUT", "DELETE"])
+@api_enabled
+@token_required
+def api_upload_session(uid):
+    """GET: progress.  PUT ?offset=N with the raw bytes: append a piece.  DELETE: cancel."""
+    meta = _load_upload(uid)
+    if meta is None:
+        return api_error("Upload not found (it may have expired).", 404)
+    if request.method == "GET":
+        return _upload_json(meta)
+    if request.method == "DELETE":
+        _drop_upload(uid)
+        return "", 204
+    try:
+        offset = int(request.args.get("offset", meta["received"]))
+    except ValueError:
+        return api_error("offset must be a number.")
+    _meta_path, part_path = _upload_paths(uid)
+    with _upload_lock:
+        received = os.path.getsize(part_path)
+        if offset != received:
+            # tell the client where to carry on (e.g. after a piece was retried)
+            body, status = api_error(f"offset must be {received}.", 409)
+            body.headers["Upload-Offset"] = str(received)
+            return body, status
+        written = 0
+        with open(part_path, "ab") as out:
+            for chunk in iter(lambda: request.stream.read(1024 * 1024), b""):
+                written += len(chunk)
+                if received + written > meta["size"]:
+                    out.truncate(received)
+                    return api_error("More data than the size given when the upload started.")
+                out.write(chunk)
+        meta["received"] = received + written
+    os.utime(_upload_paths(uid)[0])  # still active: keep it from expiring
+    return _upload_json(meta)
+
+
+@app.post("/api/<key>/uploads/<uid>/complete")
+@api_enabled
+@token_required
+def api_complete_upload(uid):
+    """Same form fields as POST /videos (title, description, category, thumbnail, ...),
+    without the file. Adds the uploaded file to the library."""
+    meta = _load_upload(uid)
+    if meta is None:
+        return api_error("Upload not found (it may have expired).", 404)
+    if meta["received"] != meta["size"]:
+        return api_error(f"Upload is incomplete: {meta['received']} of {meta['size']} bytes received.", 409)
+    form = request.form
+    if form.get("category_id"):
+        category_id = category_by_id(form["category_id"])
+        if category_id is None:
+            return api_error("category_id does not exist.")
+    else:
+        category_id = category_by_name(form.get("category", ""))
+    g.lang = "en"
+    problem = None
+    if any(k in form for k in ("series", "problem_no", "problem")):
+        problem = problem_fields(form, form.get("title"), form.get("description"), category_id)
+
+    meta_path, part_path = _upload_paths(uid)
+    stored = f"{uuid.uuid4().hex}.{ext_of(meta['filename'])}"
+    with _upload_lock:
+        if not os.path.exists(part_path):
+            return api_error("Upload not found (it may have expired).", 404)
+        os.replace(part_path, os.path.join(VIDEO_DIR, stored))
+    try:
+        os.remove(meta_path)
+    except OSError:
+        pass
+    md5 = hashlib.md5()
+    with open(os.path.join(VIDEO_DIR, stored), "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            md5.update(chunk)
+    vid, _title = add_video(stored, meta["filename"], md5.hexdigest(), None, form.get("title"),
+                            form.get("description"), category_id, request.files.get("thumbnail"),
+                            form.get("duration"), problem)
+    v = find_video(vid)
+    resp = jsonify(video_json(v))
+    resp.status_code = 201
+    resp.headers["Location"] = api_url("api_get_video", ref=v["slug"])
     return resp
 
 

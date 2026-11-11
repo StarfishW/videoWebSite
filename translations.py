@@ -172,6 +172,13 @@ ZH = {
     "One video, with stream / download / thumbnail links": "单个视频，包含播放 / 下载 / 缩略图链接",
     "Change title, description, category or category_id (JSON)": "修改 title、description、category 或 category_id（JSON）",
     "Delete a video and its files": "删除视频及其文件",
+    'Big files (over 100 MB behind Cloudflare): start a chunked upload. JSON: {"filename": "...", "size": bytes}':
+        '大文件（经过 Cloudflare 时超过 100 MB）：开始分片上传。JSON：{"filename": "...", "size": 字节数}',
+    "Send the next piece as the raw request body (50 MB pieces are fine). A wrong offset returns 409 with the right one":
+        "把下一片作为原始请求体发送（每片 50 MB 即可）。offset 不对时返回 409 并给出正确的 offset",
+    "How many bytes have arrived, to resume after a failure": "已收到多少字节，用于失败后续传",
+    "Finish: same form fields as POST /videos, without the file": "完成上传：表单字段与 POST /videos 相同，但不带文件",
+    "Cancel an unfinished upload (they also expire after 24 hours)": "取消未完成的上传（未完成的上传 24 小时后也会自动删除）",
     "List categories with video counts": "分类列表及视频数量",
     'Create a category: {"name": "..."}': '创建分类：{"name": "..."}',
     "Example response": "响应示例",

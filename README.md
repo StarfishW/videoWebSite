@@ -90,10 +90,21 @@ Paths below are relative to your API URL.
 | `GET /videos/<id or slug>` | yes | One video with stream/download/thumbnail URLs |
 | `PATCH /videos/<id or slug>` | yes | JSON: `title`, `description`, `category` or `category_id` |
 | `DELETE /videos/<id or slug>` | yes | Delete a video and its files |
+| `POST /uploads` | yes | Start a chunked upload, for big files. JSON: `{"filename": "talk.mp4", "size": <bytes>}` |
+| `PUT /uploads/<id>?offset=N` | yes | Send the next piece as the raw body. A wrong offset gives 409 and the right one in `Upload-Offset` |
+| `GET /uploads/<id>` | yes | Bytes received so far (to resume) |
+| `POST /uploads/<id>/complete` | yes | Finish: the same form fields as `POST /videos`, without `file` |
+| `DELETE /uploads/<id>` | yes | Cancel. Unfinished uploads are also deleted after 24 hours |
 | `GET /categories` | yes | Categories with counts |
 | `POST /categories` | yes | JSON: `{"name": "...", "section": "algorithms" \| "ai" \| "science"}` |
 
 The token can also be sent as `X-API-Key: <token>`.
+
+**Big files.** Cloudflare's free plan rejects any request over 100 MB, so `POST /videos` can't
+take a bigger file through it. Use the chunked upload instead: `POST /uploads` with the file name
+and size, `PUT` the file in pieces of up to ~50 MB (`?offset=` is where each piece starts), then
+`POST /uploads/<id>/complete` with the title, category and so on. If a piece fails, `GET
+/uploads/<id>` says how much arrived, so you can carry on from there.
 If ffmpeg is installed (it's included in the Docker image), uploads get a thumbnail and duration
 generated on the server.
 

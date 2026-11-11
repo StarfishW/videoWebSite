@@ -77,6 +77,11 @@ print(r.status_code, r.json())</code></pre>
       <tr><td><code>GET /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('One video, with stream / download / thumbnail links') }}</td></tr>
       <tr><td><code>PATCH /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Change title, description, category or category_id (JSON)') }}</td></tr>
       <tr><td><code>DELETE /videos/&lt;id|slug&gt;</code></td><td>&#10003;</td><td>{{ _('Delete a video and its files') }}</td></tr>
+      <tr><td><code>POST /uploads</code></td><td>&#10003;</td><td>{{ _('Big files (over 100 MB behind Cloudflare): start a chunked upload. JSON: {"filename": "...", "size": bytes}') }}</td></tr>
+      <tr><td><code>PUT /uploads/&lt;id&gt;?offset=N</code></td><td>&#10003;</td><td>{{ _('Send the next piece as the raw request body (50 MB pieces are fine). A wrong offset returns 409 with the right one') }}</td></tr>
+      <tr><td><code>GET /uploads/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('How many bytes have arrived, to resume after a failure') }}</td></tr>
+      <tr><td><code>POST /uploads/&lt;id&gt;/complete</code></td><td>&#10003;</td><td>{{ _('Finish: same form fields as POST /videos, without the file') }}</td></tr>
+      <tr><td><code>DELETE /uploads/&lt;id&gt;</code></td><td>&#10003;</td><td>{{ _('Cancel an unfinished upload (they also expire after 24 hours)') }}</td></tr>
       <tr><td><code>GET /categories</code></td><td>&#10003;</td><td>{{ _('List categories with video counts') }}</td></tr>
       <tr><td><code>POST /categories</code></td><td>&#10003;</td><td>{{ _('Create a category: {"name": "..."}') }}</td></tr>
     </tbody>
